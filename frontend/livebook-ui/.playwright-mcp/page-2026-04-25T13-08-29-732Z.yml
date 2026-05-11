@@ -1,0 +1,104 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]
+  - generic [ref=e120]:
+    - complementary [ref=e121]:
+      - generic [ref=e123]:
+        - generic [ref=e125]: 
+        - heading "Livebook" [level=1] [ref=e127]
+      - navigation [ref=e128]:
+        - button " Current Chat" [ref=e129]:
+          - generic [ref=e130]: 
+          - text: Current Chat
+        - button " Past Queries" [ref=e131]:
+          - generic [ref=e132]: 
+          - text: Past Queries
+        - button " Playbook Rules" [ref=e133]:
+          - generic [ref=e134]: 
+          - text: Playbook Rules
+      - generic [ref=e135]:
+        - generic [ref=e136]:
+          - generic [ref=e138]: 
+          - generic [ref=e139]:
+            - generic [ref=e140]: Legal Counsel
+            - generic [ref=e141]: Siemens AG
+        - button " Sign Out" [ref=e142]:
+          - generic [ref=e143]: 
+          - text: Sign Out
+    - main [ref=e144]:
+      - generic [ref=e145]:
+        - generic [ref=e146]:
+          - generic [ref=e147]:
+            - heading "Pending Approvals" [level=2] [ref=e148]
+            - paragraph [ref=e149]: Review and approve AI-suggested playbook rule updates
+          - generic [ref=e150]:
+            - generic [ref=e151]: 
+            - text: 2 Pending
+        - generic [ref=e153]:
+          - generic [ref=e154]:
+            - generic [ref=e156]:
+              - generic [ref=e157]:
+                - generic [ref=e158]: LB-2049
+                - generic [ref=e159]: Today, 10:24 AM
+              - heading "Customer is pushing for unlimited liability for data breaches. What is our red line?" [level=3] [ref=e160]
+              - paragraph [ref=e161]:
+                - generic [ref=e162]: 
+                - text: Asked by Thomas M. — Procurement
+            - generic [ref=e163]:
+              - generic [ref=e164]:
+                - generic [ref=e165]: 
+                - generic [ref=e166]: AI-Suggested Playbook Update
+              - generic [ref=e167]:
+                - generic [ref=e168]:
+                  - generic [ref=e171]: Standard Position
+                  - paragraph [ref=e172]: Liability capped at 100% of annual license fees for all claims.
+                - generic [ref=e173]:
+                  - generic [ref=e176]: Fallback
+                  - paragraph [ref=e177]: Cap raised to 200% of annual fees, but only for gross negligence and willful misconduct.
+                - generic [ref=e178]:
+                  - generic [ref=e181]: Red Line
+                  - paragraph [ref=e182]: Never accept unlimited liability. Must escalate to Legal Counsel if customer insists.
+            - generic [ref=e183]:
+              - button " Approve to Playbook" [ref=e184]:
+                - generic [ref=e185]: 
+                - text: Approve to Playbook
+              - button " Reject" [ref=e186]:
+                - generic [ref=e187]: 
+                - text: Reject
+              - button " Edit Suggestion" [ref=e188]:
+                - generic [ref=e189]: 
+                - text: Edit Suggestion
+          - generic [ref=e190]:
+            - generic [ref=e192]:
+              - generic [ref=e193]:
+                - generic [ref=e194]: LB-2048
+                - generic [ref=e195]: Yesterday, 4:15 PM
+              - heading "Can we agree to a 24-month notice period for contract termination in Germany?" [level=3] [ref=e196]
+              - paragraph [ref=e197]:
+                - generic [ref=e198]: 
+                - text: Asked by Sarah K. — Sales
+            - generic [ref=e199]:
+              - generic [ref=e200]:
+                - generic [ref=e201]: 
+                - generic [ref=e202]: AI-Suggested Playbook Update
+              - generic [ref=e203]:
+                - generic [ref=e204]:
+                  - generic [ref=e207]: Standard Position
+                  - paragraph [ref=e208]: 6-month notice period for either party.
+                - generic [ref=e209]:
+                  - generic [ref=e212]: Fallback
+                  - paragraph [ref=e213]: 12-month notice period for contracts over €500k ARR.
+                - generic [ref=e214]:
+                  - generic [ref=e217]: Red Line
+                  - paragraph [ref=e218]: No notice period exceeding 12 months under any circumstance.
+            - generic [ref=e219]:
+              - button " Approve to Playbook" [ref=e220]:
+                - generic [ref=e221]: 
+                - text: Approve to Playbook
+              - button " Reject" [ref=e222]:
+                - generic [ref=e223]: 
+                - text: Reject
+              - button " Edit Suggestion" [ref=e224]:
+                - generic [ref=e225]: 
+                - text: Edit Suggestion

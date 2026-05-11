@@ -1,0 +1,23 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]
+  - generic [ref=e356]:
+    - generic [ref=e357]:
+      - generic [ref=e359]: 
+      - heading "Livebook" [level=1] [ref=e360]
+      - paragraph [ref=e361]: Intelligent Legal Playbook Engine
+    - generic [ref=e362]:
+      - button " Sign in as Business User Access the AI chatbot and playbook queries " [ref=e363]:
+        - generic [ref=e365]: 
+        - generic [ref=e366]:
+          - generic [ref=e367]: Sign in as Business User
+          - generic [ref=e368]: Access the AI chatbot and playbook queries
+        - generic [ref=e369]: 
+      - button " Sign in as Legal Counsel Review and approve playbook rule updates " [ref=e370]:
+        - generic [ref=e372]: 
+        - generic [ref=e373]:
+          - generic [ref=e374]: Sign in as Legal Counsel
+          - generic [ref=e375]: Review and approve playbook rule updates
+        - generic [ref=e376]: 
+    - paragraph [ref=e378]: Siemens Internal Tool — Authorized Personnel Only

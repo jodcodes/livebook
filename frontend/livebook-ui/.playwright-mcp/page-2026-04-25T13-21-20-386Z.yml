@@ -1,0 +1,136 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]
+  - generic [ref=e36]:
+    - complementary [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e41]: 
+        - heading "Livebook" [level=1] [ref=e43]
+      - navigation [ref=e44]:
+        - button " Current Chat" [ref=e45]:
+          - generic [ref=e46]: 
+          - text: Current Chat
+        - button " Past Queries" [ref=e47]:
+          - generic [ref=e48]: 
+          - text: Past Queries
+        - button " Playbook Rules" [active] [ref=e49]:
+          - generic [ref=e50]: 
+          - text: Playbook Rules
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e54]: 
+          - generic [ref=e55]:
+            - generic [ref=e56]: Business User
+            - generic [ref=e57]: Siemens AG
+        - button " Sign Out" [ref=e58]:
+          - generic [ref=e59]: 
+          - text: Sign Out
+    - main [ref=e60]:
+      - generic [ref=e229]:
+        - generic [ref=e230]:
+          - generic [ref=e231]:
+            - heading "Playbook Rules" [level=2] [ref=e232]
+            - paragraph [ref=e233]: Browse and search the legal playbook rule library
+          - generic [ref=e234]: 8 rules in library
+        - generic [ref=e235]:
+          - generic [ref=e236]:
+            - generic [ref=e237]: 
+            - textbox "Search rules by ID, title, or keyword..." [ref=e238]
+          - generic [ref=e239]:
+            - button "All Rules" [ref=e240]
+            - button "Liability" [ref=e241]
+            - button "Termination" [ref=e242]
+            - button "Payment" [ref=e243]
+            - button "IP & Licensing" [ref=e244]
+            - button "Data Protection" [ref=e245]
+            - button "Warranty" [ref=e246]
+        - generic [ref=e249]:
+          - generic [ref=e251]:
+            - generic [ref=e252]:
+              - generic [ref=e253]:
+                - generic [ref=e254]: "4.2"
+                - generic [ref=e255]: Apr 20, 2026
+              - generic [ref=e256]: Liability
+            - heading "Liability & Indemnification (EMEA)" [level=3] [ref=e257]
+            - paragraph [ref=e258]: Defines liability caps and indemnification obligations for software license agreements in the EMEA region.
+            - button " View Positions" [ref=e259]:
+              - generic [ref=e260]: 
+              - text: View Positions
+          - generic [ref=e262]:
+            - generic [ref=e263]:
+              - generic [ref=e264]:
+                - generic [ref=e265]: "5.1"
+                - generic [ref=e266]: Apr 18, 2026
+              - generic [ref=e267]: Termination
+            - heading "Termination & Exit (Germany)" [level=3] [ref=e268]
+            - paragraph [ref=e269]: Governs notice periods, termination for convenience, and exit obligations for German contracts.
+            - button " View Positions" [ref=e270]:
+              - generic [ref=e271]: 
+              - text: View Positions
+          - generic [ref=e273]:
+            - generic [ref=e274]:
+              - generic [ref=e275]:
+                - generic [ref=e276]: "3.1"
+                - generic [ref=e277]: Apr 15, 2026
+              - generic [ref=e278]: Payment
+            - heading "Payment Terms (Global)" [level=3] [ref=e279]
+            - paragraph [ref=e280]: Standard payment terms, invoicing schedules, and late payment penalties for all global contracts.
+            - button " View Positions" [ref=e281]:
+              - generic [ref=e282]: 
+              - text: View Positions
+          - generic [ref=e284]:
+            - generic [ref=e285]:
+              - generic [ref=e286]:
+                - generic [ref=e287]: "6.3"
+                - generic [ref=e288]: Apr 12, 2026
+              - generic [ref=e289]: IP & Licensing
+            - heading "Intellectual Property & Licensing" [level=3] [ref=e290]
+            - paragraph [ref=e291]: Ownership, licensing rights, and IP indemnification for customer data and Siemens platforms.
+            - button " View Positions" [ref=e292]:
+              - generic [ref=e293]: 
+              - text: View Positions
+          - generic [ref=e295]:
+            - generic [ref=e296]:
+              - generic [ref=e297]:
+                - generic [ref=e298]: "7.2"
+                - generic [ref=e299]: Apr 10, 2026
+              - generic [ref=e300]: Data Protection
+            - heading "Data Localization & GDPR" [level=3] [ref=e301]
+            - paragraph [ref=e302]: Data residency requirements, GDPR compliance, and cross-border data transfer rules.
+            - button " View Positions" [ref=e303]:
+              - generic [ref=e304]: 
+              - text: View Positions
+          - generic [ref=e306]:
+            - generic [ref=e307]:
+              - generic [ref=e308]:
+                - generic [ref=e309]: "8.1"
+                - generic [ref=e310]: Apr 8, 2026
+              - generic [ref=e311]: Warranty
+            - heading "Warranty & Support (Hardware)" [level=3] [ref=e312]
+            - paragraph [ref=e313]: Warranty periods, support SLAs, and maintenance obligations for hardware components.
+            - button " View Positions" [ref=e314]:
+              - generic [ref=e315]: 
+              - text: View Positions
+          - generic [ref=e317]:
+            - generic [ref=e318]:
+              - generic [ref=e319]:
+                - generic [ref=e320]: "4.1"
+                - generic [ref=e321]: Apr 5, 2026
+              - generic [ref=e322]: Liability
+            - heading "Liability & Indemnification (Americas)" [level=3] [ref=e323]
+            - paragraph [ref=e324]: Liability caps and indemnification for Americas region, including carve-outs for IP infringement.
+            - button " View Positions" [ref=e325]:
+              - generic [ref=e326]: 
+              - text: View Positions
+          - generic [ref=e328]:
+            - generic [ref=e329]:
+              - generic [ref=e330]:
+                - generic [ref=e331]: "5.2"
+                - generic [ref=e332]: Apr 3, 2026
+              - generic [ref=e333]: Termination
+            - heading "Termination for Cause" [level=3] [ref=e334]
+            - paragraph [ref=e335]: Grounds for immediate termination including material breach, insolvency, and force majeure.
+            - button " View Positions" [ref=e336]:
+              - generic [ref=e337]: 
+              - text: View Positions

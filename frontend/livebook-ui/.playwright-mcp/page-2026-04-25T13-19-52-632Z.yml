@@ -1,0 +1,142 @@
+- generic [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]
+  - generic [ref=e36]:
+    - complementary [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e41]: 
+        - heading "Livebook" [level=1] [ref=e43]
+      - navigation [ref=e44]:
+        - button " Current Chat" [ref=e45]:
+          - generic [ref=e46]: 
+          - text: Current Chat
+        - button " Past Queries" [active] [ref=e47]:
+          - generic [ref=e48]: 
+          - text: Past Queries
+        - button " Playbook Rules" [ref=e49]:
+          - generic [ref=e50]: 
+          - text: Playbook Rules
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e54]: 
+          - generic [ref=e55]:
+            - generic [ref=e56]: Business User
+            - generic [ref=e57]: Siemens AG
+        - button " Sign Out" [ref=e58]:
+          - generic [ref=e59]: 
+          - text: Sign Out
+    - main [ref=e60]:
+      - generic [ref=e96]:
+        - generic [ref=e97]:
+          - generic [ref=e98]:
+            - heading "Past Queries" [level=2] [ref=e99]
+            - paragraph [ref=e100]: Browse previous questions and AI responses
+          - generic [ref=e101]:
+            - generic [ref=e102]: 4 Resolved
+            - generic [ref=e103]: 2 Escalated
+        - generic [ref=e104]:
+          - generic [ref=e105]:
+            - generic [ref=e106]: 
+            - textbox "Search questions, rules, or keywords..." [ref=e107]
+          - generic [ref=e108]:
+            - button "All" [ref=e109]
+            - button "Resolved" [ref=e110]
+            - button "Escalated" [ref=e111]
+        - generic [ref=e113]:
+          - 'button " Q-1042 Today, 10:24 AM Resolved What is the liability cap for software license agreements in EMEA?  Rule 4.2: Liability & Indemnification (EMEA)  Thomas M. — Procurement " [ref=e115]':
+            - generic [ref=e118]: 
+            - generic [ref=e119]:
+              - generic [ref=e120]:
+                - generic [ref=e121]: Q-1042
+                - generic [ref=e122]: Today, 10:24 AM
+                - generic [ref=e123]: Resolved
+              - heading "What is the liability cap for software license agreements in EMEA?" [level=3] [ref=e124]
+              - generic [ref=e125]:
+                - generic [ref=e126]:
+                  - generic [ref=e127]: 
+                  - text: "Rule 4.2: Liability & Indemnification (EMEA)"
+                - generic [ref=e128]:
+                  - generic [ref=e129]: 
+                  - text: Thomas M. — Procurement
+            - generic [ref=e131]: 
+          - 'button " Q-1041 Yesterday, 4:15 PM Escalated Can we agree to a 24-month notice period for contract termination in Germany?  Rule 5.1: Termination & Exit (Germany)  Sarah K. — Sales " [ref=e133]':
+            - generic [ref=e136]: 
+            - generic [ref=e137]:
+              - generic [ref=e138]:
+                - generic [ref=e139]: Q-1041
+                - generic [ref=e140]: Yesterday, 4:15 PM
+                - generic [ref=e141]: Escalated
+              - heading "Can we agree to a 24-month notice period for contract termination in Germany?" [level=3] [ref=e142]
+              - generic [ref=e143]:
+                - generic [ref=e144]:
+                  - generic [ref=e145]: 
+                  - text: "Rule 5.1: Termination & Exit (Germany)"
+                - generic [ref=e146]:
+                  - generic [ref=e147]: 
+                  - text: Sarah K. — Sales
+            - generic [ref=e149]: 
+          - 'button " Q-1040 Yesterday, 11:30 AM Resolved What is our standard payment term for SaaS contracts?  Rule 3.1: Payment Terms (Global)  Michael B. — Finance " [ref=e151]':
+            - generic [ref=e154]: 
+            - generic [ref=e155]:
+              - generic [ref=e156]:
+                - generic [ref=e157]: Q-1040
+                - generic [ref=e158]: Yesterday, 11:30 AM
+                - generic [ref=e159]: Resolved
+              - heading "What is our standard payment term for SaaS contracts?" [level=3] [ref=e160]
+              - generic [ref=e161]:
+                - generic [ref=e162]:
+                  - generic [ref=e163]: 
+                  - text: "Rule 3.1: Payment Terms (Global)"
+                - generic [ref=e164]:
+                  - generic [ref=e165]: 
+                  - text: Michael B. — Finance
+            - generic [ref=e167]: 
+          - 'button " Q-1039 Apr 23, 2:45 PM Resolved Can we accept customer-owned IP in our SaaS platform?  Rule 6.3: Intellectual Property & Licensing  Lisa H. — Product " [ref=e169]':
+            - generic [ref=e172]: 
+            - generic [ref=e173]:
+              - generic [ref=e174]:
+                - generic [ref=e175]: Q-1039
+                - generic [ref=e176]: Apr 23, 2:45 PM
+                - generic [ref=e177]: Resolved
+              - heading "Can we accept customer-owned IP in our SaaS platform?" [level=3] [ref=e178]
+              - generic [ref=e179]:
+                - generic [ref=e180]:
+                  - generic [ref=e181]: 
+                  - text: "Rule 6.3: Intellectual Property & Licensing"
+                - generic [ref=e182]:
+                  - generic [ref=e183]: 
+                  - text: Lisa H. — Product
+            - generic [ref=e185]: 
+          - 'button " Q-1038 Apr 22, 9:20 AM Escalated Customer wants us to store data in China. Is this compliant?  Rule 7.2: Data Localization & GDPR  David R. — IT Security " [ref=e187]':
+            - generic [ref=e190]: 
+            - generic [ref=e191]:
+              - generic [ref=e192]:
+                - generic [ref=e193]: Q-1038
+                - generic [ref=e194]: Apr 22, 9:20 AM
+                - generic [ref=e195]: Escalated
+              - heading "Customer wants us to store data in China. Is this compliant?" [level=3] [ref=e196]
+              - generic [ref=e197]:
+                - generic [ref=e198]:
+                  - generic [ref=e199]: 
+                  - text: "Rule 7.2: Data Localization & GDPR"
+                - generic [ref=e200]:
+                  - generic [ref=e201]: 
+                  - text: David R. — IT Security
+            - generic [ref=e203]: 
+          - 'button " Q-1037 Apr 21, 3:10 PM Resolved What is our warranty period for hardware components?  Rule 8.1: Warranty & Support (Hardware)  Anna P. — Operations " [ref=e205]':
+            - generic [ref=e208]: 
+            - generic [ref=e209]:
+              - generic [ref=e210]:
+                - generic [ref=e211]: Q-1037
+                - generic [ref=e212]: Apr 21, 3:10 PM
+                - generic [ref=e213]: Resolved
+              - heading "What is our warranty period for hardware components?" [level=3] [ref=e214]
+              - generic [ref=e215]:
+                - generic [ref=e216]:
+                  - generic [ref=e217]: 
+                  - text: "Rule 8.1: Warranty & Support (Hardware)"
+                - generic [ref=e218]:
+                  - generic [ref=e219]: 
+                  - text: Anna P. — Operations
+            - generic [ref=e221]: 

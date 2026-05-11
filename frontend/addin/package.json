@@ -1,0 +1,17 @@
+{
+  "name": "livebook-word-addin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/dev-server.mjs",
+    "preview": "node scripts/dev-server.mjs",
+    "validate": "node scripts/validate-manifest.mjs",
+    "start": "node scripts/dev-server.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.11",
+    "office-addin-dev-certs": "^2.0.7"
+  }
+}

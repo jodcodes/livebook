@@ -1,0 +1,70 @@
+- generic [active] [ref=e1]:
+  - button "Open Next.js Dev Tools" [ref=e31] [cursor=pointer]:
+    - img [ref=e32]
+  - alert [ref=e35]
+  - generic [ref=e36]:
+    - complementary [ref=e37]:
+      - generic [ref=e39]:
+        - generic [ref=e41]: 
+        - heading "Livebook" [level=1] [ref=e43]
+      - navigation [ref=e44]:
+        - button " Current Chat" [ref=e45]:
+          - generic [ref=e46]: 
+          - text: Current Chat
+        - button " Past Queries" [ref=e47]:
+          - generic [ref=e48]: 
+          - text: Past Queries
+        - button " Playbook Rules" [ref=e49]:
+          - generic [ref=e50]: 
+          - text: Playbook Rules
+      - generic [ref=e51]:
+        - generic [ref=e52]:
+          - generic [ref=e54]: 
+          - generic [ref=e55]:
+            - generic [ref=e56]: Business User
+            - generic [ref=e57]: Siemens AG
+        - button " Sign Out" [ref=e58]:
+          - generic [ref=e59]: 
+          - text: Sign Out
+    - main [ref=e60]:
+      - generic [ref=e61]:
+        - generic [ref=e62]:
+          - generic [ref=e63]:
+            - heading "Livebook Chat" [level=2] [ref=e64]
+            - paragraph [ref=e65]: Ask about contract rules, clauses, and playbook positions
+          - generic [ref=e66]:
+            - generic [ref=e67]: 
+            - text: AI Online
+        - generic [ref=e68]:
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - generic [ref=e71]: What is the liability cap for software license agreements in EMEA?
+              - generic [ref=e72]: 10:23 AM
+            - generic [ref=e74]: 
+          - generic [ref=e75]:
+            - generic [ref=e77]: 
+            - generic [ref=e78]:
+              - generic [ref=e79]:
+                - text: According to
+                - strong [ref=e80]: Playbook Rule 4.2 — Liability & Indemnification (EMEA)
+                - text: ", here is our position on liability caps for software license agreements:"
+                - strong [ref=e81]: Standard Position
+                - text: Liability is capped at
+                - strong [ref=e82]: 100% of the annual license fees
+                - text: .
+                - strong [ref=e83]: Fallback Position
+                - text: If the customer pushes back, we can agree to
+                - strong [ref=e84]: 200% of annual fees
+                - text: ", but only for gross negligence and willful misconduct."
+                - strong [ref=e85]: Red Line
+                - text: We never accept unlimited liability. Any request for uncapped liability must be escalated to Legal Counsel for approval. Would you like me to generate contract language for the Standard Position?
+              - generic [ref=e86]: 10:24 AM
+        - generic [ref=e87]:
+          - generic [ref=e88]:
+            - generic [ref=e89]:
+              - textbox "Ask about liability limits, indemnification, termination clauses..." [ref=e90]
+              - button "" [ref=e91]:
+                - generic [ref=e92]: 
+            - button "" [disabled] [ref=e93]:
+              - generic [ref=e94]: 
+          - paragraph [ref=e95]: Livebook may produce inaccurate information. Always verify critical legal decisions with Legal Counsel.
