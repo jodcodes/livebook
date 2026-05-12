@@ -275,13 +275,10 @@ async fn read_suggestions() -> Result<Vec<Value>, (StatusCode, String)> {
 
 async fn write_suggestions(suggestions: &[Value]) -> Result<(), (StatusCode, String)> {
     for suggestion in suggestions {
-        let id = suggestion
-            .get("id")
-            .and_then(Value::as_str)
-            .ok_or((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "evolve suggestion is missing id".to_string(),
-            ))?;
+        let id = suggestion.get("id").and_then(Value::as_str).ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "evolve suggestion is missing id".to_string(),
+        ))?;
         let clause_id = suggestion.get("clause_id").and_then(Value::as_str);
         let status = suggestion
             .get("status")

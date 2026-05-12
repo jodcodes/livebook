@@ -1317,9 +1317,14 @@ async fn read_playbook_array() -> Result<Vec<Value>, (StatusCode, String)> {
 }
 
 async fn write_playbook_array(clauses: &[Value]) -> Result<(), (StatusCode, String)> {
-    store::replace_playbook_documents(&Value::Array(clauses.to_vec()), "tabular_review_apply", None, None)
-        .await
-        .map_err(internal_error)
+    store::replace_playbook_documents(
+        &Value::Array(clauses.to_vec()),
+        "tabular_review_apply",
+        None,
+        None,
+    )
+    .await
+    .map_err(internal_error)
 }
 
 fn internal_error(message: String) -> (StatusCode, String) {

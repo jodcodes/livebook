@@ -605,13 +605,10 @@ async fn read_queue() -> Result<Vec<Value>, (StatusCode, String)> {
 
 async fn write_queue(queue: &[Value]) -> Result<(), (StatusCode, String)> {
     for item in queue {
-        let id = item
-            .get("id")
-            .and_then(Value::as_str)
-            .ok_or((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "email queue item is missing id".to_string(),
-            ))?;
+        let id = item.get("id").and_then(Value::as_str).ok_or((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "email queue item is missing id".to_string(),
+        ))?;
         let status = item
             .get("status")
             .and_then(Value::as_str)

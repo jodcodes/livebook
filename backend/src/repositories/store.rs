@@ -150,7 +150,11 @@ pub async fn list_escalations() -> Result<Vec<Value>, String> {
     list_table_payloads("escalations", "created_at DESC, id DESC").await
 }
 
-pub async fn upsert_email_queue_item(id: &str, status: &str, payload: &Value) -> Result<(), String> {
+pub async fn upsert_email_queue_item(
+    id: &str,
+    status: &str,
+    payload: &Value,
+) -> Result<(), String> {
     upsert_queue_payload("email_queue", id, status, payload).await
 }
 
@@ -178,13 +182,14 @@ pub async fn upsert_tabular_review_session(
 }
 
 pub async fn list_tabular_review_sessions() -> Result<Vec<Value>, String> {
-    list_table_payloads("tabular_review_sessions", "created_at DESC, session_id DESC").await
+    list_table_payloads(
+        "tabular_review_sessions",
+        "created_at DESC, session_id DESC",
+    )
+    .await
 }
 
-pub async fn upsert_tabular_review_rows(
-    session_id: &str,
-    rows: &[Value],
-) -> Result<(), String> {
+pub async fn upsert_tabular_review_rows(session_id: &str, rows: &[Value]) -> Result<(), String> {
     let mut client = db()?.client().await?;
     let txn = client
         .transaction()
@@ -219,7 +224,12 @@ pub async fn upsert_tabular_review_rows(
     Ok(())
 }
 
-pub async fn upsert_evolve_suggestion(id: &str, clause_id: Option<&str>, status: &str, payload: &Value) -> Result<(), String> {
+pub async fn upsert_evolve_suggestion(
+    id: &str,
+    clause_id: Option<&str>,
+    status: &str,
+    payload: &Value,
+) -> Result<(), String> {
     let client = db()?.client().await?;
     client
         .execute(
@@ -309,10 +319,7 @@ pub async fn approved_clause_context() -> Result<Vec<Value>, String> {
     Ok(rows.into_iter().map(|row| row.get::<_, Value>(0)).collect())
 }
 
-pub async fn retrieve_clause_matches(
-    embedding: &[f32],
-    limit: i64,
-) -> Result<Vec<Value>, String> {
+pub async fn retrieve_clause_matches(embedding: &[f32], limit: i64) -> Result<Vec<Value>, String> {
     let client = db()?.client().await?;
     let vector = Vector::from(embedding.to_vec());
     let rows = client
@@ -345,9 +352,12 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
     txn.execute("DELETE FROM clause_versions", &[])
         .await
         .map_err(|err| format!("failed to clear clause versions: {err}"))?;
-    txn.execute("DELETE FROM clause_embeddings WHERE clause_id NOT IN (SELECT clause_id FROM clauses)", &[])
-        .await
-        .ok();
+    txn.execute(
+        "DELETE FROM clause_embeddings WHERE clause_id NOT IN (SELECT clause_id FROM clauses)",
+        &[],
+    )
+    .await
+    .ok();
     txn.execute("DELETE FROM clauses", &[])
         .await
         .map_err(|err| format!("failed to clear clauses: {err}"))?;
@@ -381,7 +391,10 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
             .and_then(Value::as_str)
             .unwrap_or("pending");
         let approved = review_status == "approved";
-        let name = clause.get("name").and_then(Value::as_str).unwrap_or(clause_id);
+        let name = clause
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or(clause_id);
         let clause_type = clause
             .get("clause_type")
             .and_then(Value::as_str)
@@ -420,7 +433,13 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
             "INSERT INTO clause_versions
              (version_id, clause_id, playbook_id, version_number, payload, created_at)
              VALUES ($1, $2, $3, $4, $5, NOW())",
-            &[&version_id, &clause_id, &playbook_id, &version_number, clause],
+            &[
+                &version_id,
+                &clause_id,
+                &playbook_id,
+                &version_number,
+                clause,
+            ],
         )
         .await
         .map_err(|err| format!("failed to insert clause version `{version_id}`: {err}"))?;
@@ -456,7 +475,15 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
             "INSERT INTO playbooks
              (id, name, playbook_type, party_name, law_type, clause_count, payload, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())",
-            &[&playbook_id, &name, &playbook_type, &party_name, &law_type, &clause_count, &payload],
+            &[
+                &playbook_id,
+                &name,
+                &playbook_type,
+                &party_name,
+                &law_type,
+                &clause_count,
+                &payload,
+            ],
         )
         .await
         .map_err(|err| format!("failed to insert playbook `{playbook_id}`: {err}"))?;
@@ -470,11 +497,31 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
 
 fn normalized_clause_text(clause: &Value) -> String {
     let mut parts = vec![
-        clause.get("clause_id").and_then(Value::as_str).unwrap_or("").to_string(),
-        clause.get("name").and_then(Value::as_str).unwrap_or("").to_string(),
-        clause.get("clause_type").and_then(Value::as_str).unwrap_or("").to_string(),
-        clause.get("law_type").and_then(Value::as_str).unwrap_or("").to_string(),
-        clause.get("party_name").and_then(Value::as_str).unwrap_or("").to_string(),
+        clause
+            .get("clause_id")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        clause
+            .get("name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        clause
+            .get("clause_type")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        clause
+            .get("law_type")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
+        clause
+            .get("party_name")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string(),
     ];
     if let Some(positions) = clause.get("positions").and_then(Value::as_object) {
         let text = positions
@@ -508,7 +555,12 @@ fn add_similarity(row: Row) -> Value {
     payload
 }
 
-async fn upsert_queue_payload(table: &str, id: &str, status: &str, payload: &Value) -> Result<(), String> {
+async fn upsert_queue_payload(
+    table: &str,
+    id: &str,
+    status: &str,
+    payload: &Value,
+) -> Result<(), String> {
     let client = db()?.client().await?;
     let sql = format!(
         "INSERT INTO {table} (id, status, payload, created_at)

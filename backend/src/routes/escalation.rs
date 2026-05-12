@@ -9,10 +9,10 @@ use serde_json::Value;
 use tracing::{instrument, warn};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::repositories::store;
 use crate::routes::chat_queries::{
     ChatQueryActor, link_chat_query_to_escalation, update_chat_query_review,
 };
-use crate::repositories::store;
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 pub struct EscalationActor {

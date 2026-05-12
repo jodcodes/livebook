@@ -2,10 +2,7 @@ use axum::http::StatusCode;
 use serde_json::{Value, json};
 use tracing::warn;
 
-use crate::{
-    config::AppConfig,
-    repositories::store,
-};
+use crate::{config::AppConfig, repositories::store};
 
 pub async fn refresh_embeddings_for_playbook(playbook: &Value) -> Result<(), (StatusCode, String)> {
     let config = store::config().map_err(internal_error)?;
@@ -92,7 +89,10 @@ pub fn retrieval_text_for_clause(clause: &Value) -> String {
     let mut sections = vec![
         format!(
             "Clause {}",
-            clause.get("clause_id").and_then(Value::as_str).unwrap_or("")
+            clause
+                .get("clause_id")
+                .and_then(Value::as_str)
+                .unwrap_or("")
         ),
         clause
             .get("name")
@@ -166,25 +166,51 @@ fn keyword_ranked_clauses(
             (score, clause)
         })
         .collect::<Vec<_>>();
-    scored.sort_by(|left, right| right.0.partial_cmp(&left.0).unwrap_or(std::cmp::Ordering::Equal));
-    scored.into_iter().take(8).map(|(_, clause)| clause).collect()
+    scored.sort_by(|left, right| {
+        right
+            .0
+            .partial_cmp(&left.0)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    scored
+        .into_iter()
+        .take(8)
+        .map(|(_, clause)| clause)
+        .collect()
 }
 
-fn rerank_keyword_hits(clauses: &mut [Value], question: &str, history: &[crate::routes::question::ChatTurn]) {
+fn rerank_keyword_hits(
+    clauses: &mut [Value],
+    question: &str,
+    history: &[crate::routes::question::ChatTurn],
+) {
     let scope = normalize_text(&question_with_history(question, history));
     clauses.sort_by(|left, right| {
         keyword_boost(right, &scope)
             .cmp(&keyword_boost(left, &scope))
-            .then_with(|| similarity(right).partial_cmp(&similarity(left)).unwrap_or(std::cmp::Ordering::Equal))
+            .then_with(|| {
+                similarity(right)
+                    .partial_cmp(&similarity(left))
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
     });
 }
 
 fn keyword_boost(clause: &Value, scope: &str) -> usize {
     [
-        clause.get("clause_id").and_then(Value::as_str).unwrap_or(""),
+        clause
+            .get("clause_id")
+            .and_then(Value::as_str)
+            .unwrap_or(""),
         clause.get("name").and_then(Value::as_str).unwrap_or(""),
-        clause.get("clause_type").and_then(Value::as_str).unwrap_or(""),
-        clause.get("party_name").and_then(Value::as_str).unwrap_or(""),
+        clause
+            .get("clause_type")
+            .and_then(Value::as_str)
+            .unwrap_or(""),
+        clause
+            .get("party_name")
+            .and_then(Value::as_str)
+            .unwrap_or(""),
     ]
     .into_iter()
     .map(normalize_text)
@@ -233,7 +259,12 @@ async fn embed_text(
         }))
         .send()
         .await
-        .map_err(|err| (StatusCode::BAD_GATEWAY, format!("failed to call OpenAI embeddings API: {err}")))?;
+        .map_err(|err| {
+            (
+                StatusCode::BAD_GATEWAY,
+                format!("failed to call OpenAI embeddings API: {err}"),
+            )
+        })?;
 
     if !response.status().is_success() {
         let status = response.status();
@@ -247,17 +278,24 @@ async fn embed_text(
         ));
     }
 
-    let payload: Value = response
-        .json()
-        .await
-        .map_err(|err| (StatusCode::BAD_GATEWAY, format!("failed to decode embeddings response: {err}")))?;
+    let payload: Value = response.json().await.map_err(|err| {
+        (
+            StatusCode::BAD_GATEWAY,
+            format!("failed to decode embeddings response: {err}"),
+        )
+    })?;
     let embedding = payload
         .get("data")
         .and_then(Value::as_array)
         .and_then(|items| items.first())
         .and_then(|item| item.get("embedding"))
         .and_then(Value::as_array)
-        .ok_or_else(|| (StatusCode::BAD_GATEWAY, "OpenAI embeddings response was missing data[0].embedding".to_string()))?;
+        .ok_or_else(|| {
+            (
+                StatusCode::BAD_GATEWAY,
+                "OpenAI embeddings response was missing data[0].embedding".to_string(),
+            )
+        })?;
 
     let values = embedding
         .iter()
