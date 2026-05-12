@@ -15,6 +15,11 @@ use crate::repositories::store;
 use crate::routes::evolve::run_evolve_analysis;
 use crate::services::retrieval;
 
+const PLAYBOOK_CURRENT_DIR: &str = "runtime/playbook/current";
+const PLAYBOOK_HISTORY_DIR: &str = "runtime/playbook/history";
+const PLAYBOOK_JSON_PATH: &str = "runtime/playbook/current/playbook.json";
+const PLAYBOOK_UPLOAD_DRAFT_DIR: &str = "runtime/playbook/current/upload_drafts";
+
 #[derive(Debug, Clone, Copy)]
 enum PlaybookFileKind {
     Pdf,
@@ -319,22 +324,26 @@ pub async fn post_playbook(
         "received playbook source files"
     );
 
-    fs::create_dir_all("playbook").await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to create playbook directory: {err}"),
-        )
-    })?;
+    fs::create_dir_all(PLAYBOOK_CURRENT_DIR)
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to create runtime playbook directory: {err}"),
+            )
+        })?;
 
     let nonce = Utc::now().format("%Y%m%dT%H%M%S%3f").to_string();
     let playbook_id = format!("{}-{nonce}", slugify_identifier(&playbook_name));
-    let playbook_json_path = "playbook/playbook.json";
 
     let process_result: Result<(StatusCode, Value), (StatusCode, String)> = async {
         let mut extracted_sections = Vec::new();
         for (idx, file) in uploaded_files.iter().enumerate() {
-            let file_path = format!("playbook/playbook_{nonce}_{idx}.{}", file.kind.extension());
-            let raw_txt_path = format!("playbook/playbook_{nonce}_{idx}_raw.txt");
+            let file_path = format!(
+                "{PLAYBOOK_CURRENT_DIR}/playbook_{nonce}_{idx}.{}",
+                file.kind.extension()
+            );
+            let raw_txt_path = format!("{PLAYBOOK_CURRENT_DIR}/playbook_{nonce}_{idx}_raw.txt");
 
             fs::write(&file_path, &file.bytes).await.map_err(|err| {
                 (
@@ -466,7 +475,7 @@ pub async fn post_playbook(
     let (status, response) = process_result?;
     let _ = run_evolve_analysis().await;
     info!(
-        output_path = %playbook_json_path,
+        output_path = %PLAYBOOK_JSON_PATH,
         upload_mode,
         "playbook json extraction finished"
     );
@@ -1458,20 +1467,22 @@ pub async fn patch_playbook(body: String) -> Result<StatusCode, (StatusCode, Str
         )
     })?;
 
-    fs::create_dir_all("playbook").await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to create playbook directory: {err}"),
-        )
-    })?;
+    fs::create_dir_all(PLAYBOOK_CURRENT_DIR)
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to create runtime playbook directory: {err}"),
+            )
+        })?;
 
-    let current_raw = match fs::read_to_string("playbook/playbook.json").await {
+    let current_raw = match fs::read_to_string(PLAYBOOK_JSON_PATH).await {
         Ok(content) => content,
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => "null".to_string(),
         Err(err) => {
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to read playbook JSON file: {err}"),
+                format!("failed to read runtime playbook JSON file: {err}"),
             ));
         }
     };
@@ -2060,17 +2071,17 @@ pub async fn restore_clause_version(
     get,
     path = "/playbook/history",
     responses(
-        (status = 200, description = "Full .playbook history contents including CURRENT and history.log.", body = Value),
+        (status = 200, description = "Full runtime/playbook/history contents including CURRENT and history.log.", body = Value),
         (status = 500, description = "Server-side processing failure.")
     ),
     tag = "Playbook"
 )]
 #[instrument]
 pub async fn get_playbook_history() -> Result<Json<Value>, (StatusCode, String)> {
-    let mut directory = fs::read_dir(".playbook").await.map_err(|err| {
+    let mut directory = fs::read_dir(PLAYBOOK_HISTORY_DIR).await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to read .playbook directory: {err}"),
+            format!("failed to read runtime playbook history directory: {err}"),
         )
     })?;
 
@@ -2079,13 +2090,13 @@ pub async fn get_playbook_history() -> Result<Json<Value>, (StatusCode, String)>
     while let Some(entry) = directory.next_entry().await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to iterate .playbook directory: {err}"),
+            format!("failed to iterate runtime playbook history directory: {err}"),
         )
     })? {
         let file_type = entry.file_type().await.map_err(|err| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to inspect .playbook entry type: {err}"),
+                format!("failed to inspect runtime playbook history entry type: {err}"),
             )
         })?;
         if !file_type.is_file() {
@@ -2096,7 +2107,7 @@ pub async fn get_playbook_history() -> Result<Json<Value>, (StatusCode, String)>
         let content = fs::read_to_string(entry.path()).await.map_err(|err| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to read .playbook/{file_name}: {err}"),
+                format!("failed to read runtime playbook history file {file_name}: {err}"),
             )
         })?;
 
@@ -2109,7 +2120,7 @@ pub async fn get_playbook_history() -> Result<Json<Value>, (StatusCode, String)>
     }
 
     Ok(Json(json!({
-        "path": ".playbook",
+        "path": PLAYBOOK_HISTORY_DIR,
         "files": files
     })))
 }
@@ -2128,7 +2139,7 @@ async fn read_playbook_array() -> Result<Vec<Value>, (StatusCode, String)> {
 }
 
 async fn playbook_file_modified_at() -> Option<String> {
-    let metadata = fs::metadata("playbook/playbook.json").await.ok()?;
+    let metadata = fs::metadata(PLAYBOOK_JSON_PATH).await.ok()?;
     let modified = metadata.modified().ok()?;
     let modified_at: DateTime<Utc> = modified.into();
     Some(modified_at.to_rfc3339())
@@ -3016,7 +3027,7 @@ async fn read_playbook_or_null() -> Result<Value, (StatusCode, String)> {
 }
 
 fn upload_draft_path(draft_id: &str) -> String {
-    format!("playbook/upload_drafts/{draft_id}.json")
+    format!("{PLAYBOOK_UPLOAD_DRAFT_DIR}/{draft_id}.json")
 }
 
 fn generate_upload_draft_id(playbook_id: &str) -> String {
@@ -3028,7 +3039,7 @@ fn generate_upload_draft_id(playbook_id: &str) -> String {
 }
 
 async fn write_upload_draft(draft_id: &str, draft: &Value) -> Result<(), (StatusCode, String)> {
-    fs::create_dir_all("playbook/upload_drafts")
+    fs::create_dir_all(PLAYBOOK_UPLOAD_DRAFT_DIR)
         .await
         .map_err(|err| {
             (
@@ -3095,7 +3106,10 @@ async fn write_playbook_versions(versions: &[Value]) -> Result<(), (StatusCode, 
         .map_err(internal_error)
 }
 
-async fn persist_current_playbook(current: &Value, operation: &str) -> Result<(), (StatusCode, String)> {
+async fn persist_current_playbook(
+    current: &Value,
+    operation: &str,
+) -> Result<(), (StatusCode, String)> {
     store::replace_playbook_documents(current, operation, None, None)
         .await
         .map_err(internal_error)
@@ -3289,17 +3303,19 @@ async fn write_playbook_change_history(
         return Ok(());
     }
 
-    fs::create_dir_all(".playbook").await.map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to create .playbook directory: {err}"),
-        )
-    })?;
+    fs::create_dir_all(PLAYBOOK_HISTORY_DIR)
+        .await
+        .map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to create runtime playbook history directory: {err}"),
+            )
+        })?;
 
-    let previous_path = format!(".playbook/{previous_hash:016x}.json");
-    let current_path = format!(".playbook/{current_hash:016x}.json");
-    let previous_hashed_path = format!(".playbook/{previous_hash:016x}.hashed.json");
-    let current_hashed_path = format!(".playbook/{current_hash:016x}.hashed.json");
+    let previous_path = format!("{PLAYBOOK_HISTORY_DIR}/{previous_hash:016x}.json");
+    let current_path = format!("{PLAYBOOK_HISTORY_DIR}/{current_hash:016x}.json");
+    let previous_hashed_path = format!("{PLAYBOOK_HISTORY_DIR}/{previous_hash:016x}.hashed.json");
+    let current_hashed_path = format!("{PLAYBOOK_HISTORY_DIR}/{current_hash:016x}.hashed.json");
 
     let previous_serialized = serde_json::to_string_pretty(previous).map_err(|err| {
         (
@@ -3362,24 +3378,27 @@ async fn write_playbook_change_history(
             )
         })?;
 
-    fs::write(".playbook/CURRENT", format!("{current_hash:016x}\n"))
-        .await
-        .map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to update .playbook/CURRENT: {err}"),
-            )
-        })?;
+    fs::write(
+        format!("{PLAYBOOK_HISTORY_DIR}/CURRENT"),
+        format!("{current_hash:016x}\n"),
+    )
+    .await
+    .map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("failed to update runtime playbook history CURRENT: {err}"),
+        )
+    })?;
 
     let mut history_log = fs::OpenOptions::new()
         .create(true)
         .append(true)
-        .open(".playbook/history.log")
+        .open(format!("{PLAYBOOK_HISTORY_DIR}/history.log"))
         .await
         .map_err(|err| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                format!("failed to open .playbook/history.log: {err}"),
+                format!("failed to open runtime playbook history log: {err}"),
             )
         })?;
 
@@ -3389,7 +3408,7 @@ async fn write_playbook_change_history(
     history_log.write_all(line.as_bytes()).await.map_err(|err| {
         (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to write .playbook/history.log: {err}"),
+            format!("failed to write runtime playbook history log: {err}"),
         )
     })
 }
