@@ -29,24 +29,7 @@ legal and business users can work from the same source of truth.
 
 ## Quick start
 
-1. Copy values from [.env.example](.env.example).
-2. Start Postgres:
-
-```bash
-docker compose up -d postgres
-```
-
-3. Start the full dev environment:
-
-```bash
-make dev
-```
-
-Default local endpoints:
-
-- Web UI: `https://localhost:5001/`
-- Backend API: `https://localhost:5001/api/question`
-- Word add-in task pane: `https://localhost:5001/taskpane.html`
+See [QUICKSTART.md](QUICKSTART.md) for a short, copy-paste friendly setup guide.
 
 ## Environment
 
