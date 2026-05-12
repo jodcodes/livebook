@@ -11,6 +11,7 @@ use tokio::{fs, io::AsyncWriteExt, process::Command};
 use tracing::{info, instrument, warn};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::openai::missing_api_key_error;
 use crate::repositories::store;
 use crate::routes::evolve::run_evolve_analysis;
 use crate::services::retrieval;
@@ -453,7 +454,7 @@ pub async fn post_playbook(
         persist_current_playbook(&current, "post").await?;
         write_playbook_change_history(&previous_playbook, &current, "post").await?;
         record_playbook_version(&current, &playbook_id, "create", true, &version_ids).await?;
-        let _ = retrieval::refresh_embeddings_for_playbook(&current).await;
+        retrieval::refresh_embeddings_for_playbook(&current).await?;
         Ok((
             StatusCode::CREATED,
             json!({
@@ -558,7 +559,7 @@ pub async fn confirm_playbook_upload_draft(
         &changed_clause_ids,
     )
     .await?;
-    let _ = retrieval::refresh_embeddings_for_playbook(&current).await;
+    retrieval::refresh_embeddings_for_playbook(&current).await?;
     let _ = fs::remove_file(upload_draft_path(&draft_id)).await;
     let _ = run_evolve_analysis().await;
 
@@ -1557,7 +1558,7 @@ pub async fn patch_playbook(body: String) -> Result<StatusCode, (StatusCode, Str
     for playbook_id in &changed_playbook_ids {
         record_playbook_version(&current, playbook_id, "bulk_patch", true, &Vec::new()).await?;
     }
-    let _ = retrieval::refresh_embeddings_for_playbook(&current).await;
+    retrieval::refresh_embeddings_for_playbook(&current).await?;
     let _ = run_evolve_analysis().await;
 
     info!(
@@ -3567,12 +3568,7 @@ fn hash_json_values_for_key(value: &Value, current_key: Option<&str>) -> Value {
 async fn build_playbook_json_with_openai(
     cleaned_text: &str,
 ) -> Result<Value, (StatusCode, String)> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "OPENAI_API_KEY is not configured".to_string(),
-        )
-    })?;
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| missing_api_key_error())?;
 
     let schema_template = json!({
       "clause_id": "<string>",

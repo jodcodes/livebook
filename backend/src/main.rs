@@ -1,6 +1,7 @@
 mod auth;
 mod config;
 mod db;
+mod openai;
 mod repositories;
 mod routes;
 mod services;

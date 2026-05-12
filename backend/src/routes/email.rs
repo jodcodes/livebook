@@ -10,6 +10,7 @@ use tokio::time::{Duration, sleep};
 use tracing::{instrument, warn};
 use utoipa::{IntoParams, ToSchema};
 
+use crate::openai::missing_api_key_error;
 use crate::repositories::store;
 use crate::routes::evolve::run_evolve_analysis;
 
@@ -247,27 +248,14 @@ pub async fn run_email_processing_loop() {
 
 async fn extract_email_outcome(source: &str) -> Result<Value, (StatusCode, String)> {
     let playbook = read_playbook_array().await.unwrap_or_default();
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        match extract_email_outcome_with_openai(source, &playbook).await {
-            Ok(extracted) => return Ok(extracted),
-            Err((status, message)) => {
-                warn!(%status, %message, "OpenAI email extraction failed; falling back to deterministic extraction");
-            }
-        }
-    }
-    Ok(extract_email_outcome_locally(source, &playbook))
+    extract_email_outcome_with_openai(source, &playbook).await
 }
 
 async fn extract_email_outcome_with_openai(
     source: &str,
     playbook: &[Value],
 ) -> Result<Value, (StatusCode, String)> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "OPENAI_API_KEY is not configured".to_string(),
-        )
-    })?;
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| missing_api_key_error())?;
     let playbook_json = serde_json::to_string_pretty(playbook).unwrap_or_else(|_| "[]".to_string());
     let prompt = format!(
         "Extract negotiation outcomes from the email thread for lawyer review.\n\
@@ -334,6 +322,7 @@ async fn extract_email_outcome_with_openai(
     Ok(normalize_email_extraction(parsed, source))
 }
 
+#[cfg(test)]
 fn extract_email_outcome_locally(source: &str, playbook: &[Value]) -> Value {
     let lower_source = source.to_ascii_lowercase();
     let mut clauses = Vec::new();
@@ -517,6 +506,7 @@ fn infer_counterparty(source: &str) -> String {
     String::new()
 }
 
+#[cfg(test)]
 fn infer_outcome(lower_source: &str) -> &'static str {
     if lower_source.contains("red line") || lower_source.contains("unlimited") {
         "red_line_breached"
@@ -529,6 +519,7 @@ fn infer_outcome(lower_source: &str) -> &'static str {
     }
 }
 
+#[cfg(test)]
 fn infer_confidence(
     matches_clause_id: bool,
     matches_name: bool,
@@ -548,6 +539,7 @@ fn infer_confidence(
     }
 }
 
+#[cfg(test)]
 fn infer_evidence(
     source: &str,
     clause_id: &str,

@@ -56,10 +56,11 @@ When a user asks a question:
 1. The UI or add-in sends the question to `POST /question`.
 2. The backend applies prompt-injection guardrails and special-case handlers.
 3. The backend loads the approved playbook context.
-4. If `OPENAI_API_KEY` is present, the question plus recent history is embedded.
-5. `pgvector` similarity search returns the most relevant approved clauses.
-6. If embeddings are unavailable or no vector hits exist, the backend falls back
-   to keyword ranking over the approved clause context.
+4. If `OPENAI_API_KEY` is missing, the request fails with an error.
+5. The question plus recent history is embedded and `pgvector` similarity
+   search returns the most relevant approved clauses.
+6. If no vector hits exist, the backend returns an empty retrieval set instead
+   of switching to keyword ranking.
 7. The retrieved clauses are serialized as evidence and sent to OpenAI's
    responses API.
 8. The model returns structured JSON with the answer, clause reference,
@@ -76,8 +77,18 @@ The database schema uses `VECTOR(n)` where `n` comes from
 `OPENAI_EMBEDDING_DIMENSIONS`. The default model and dimension values are set in
 `.env.example`.
 
-If the embeddings request fails, the embedding row is marked stale so the system
-can keep working with fallback retrieval instead of failing hard.
+If `OPENAI_API_KEY` is missing, embedding refresh reports an error. Transient
+OpenAI request failures can still mark an embedding row stale, but the retrieval
+path itself no longer switches to keyword fallback.
+
+## Tabular Review
+
+Tabular review uses OpenAI to extract structured clause outcomes from uploaded
+contracts.
+
+- If `OPENAI_API_KEY` is missing, the tabular review request fails with an error.
+- There is no local deterministic fallback path for contract analysis.
+- The OpenAI response is mapped directly into tabular review rows.
 
 ## Escalation Flow
 

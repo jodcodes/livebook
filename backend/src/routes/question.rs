@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 use tracing::{info, instrument, warn};
 use utoipa::ToSchema;
 
+use crate::openai::missing_api_key_error;
 use crate::repositories::store;
 use crate::routes::chat_queries::{ChatQueryActor, CreateChatQuery, record_chat_query};
 use crate::routes::playbook::{compare_versions, extract_version_ids_from_text};
@@ -121,10 +122,10 @@ async fn answer_question(
     }
 
     let config = store::config().map_err(internal_error)?;
-    let api_key = config.openai_api_key.clone().ok_or((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        "OPENAI_API_KEY is not configured".to_string(),
-    ))?;
+    let api_key = config
+        .openai_api_key
+        .clone()
+        .ok_or_else(missing_api_key_error)?;
     let retrieved_clauses = retrieval::retrieve_relevant_clauses(&body.q, &history_turns).await?;
     if retrieved_clauses.is_empty() {
         return Err((

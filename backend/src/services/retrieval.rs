@@ -2,12 +2,12 @@ use axum::http::StatusCode;
 use serde_json::{Value, json};
 use tracing::warn;
 
-use crate::{config::AppConfig, repositories::store};
+use crate::{config::AppConfig, openai::missing_api_key_error, repositories::store};
 
 pub async fn refresh_embeddings_for_playbook(playbook: &Value) -> Result<(), (StatusCode, String)> {
     let config = store::config().map_err(internal_error)?;
     let Some(api_key) = config.openai_api_key.clone() else {
-        return Ok(());
+        return Err(missing_api_key_error());
     };
     let Some(clauses) = playbook.as_array() else {
         return Ok(());
@@ -69,19 +69,14 @@ pub async fn retrieve_relevant_clauses(
         return Ok(Vec::new());
     }
     let Some(api_key) = config.openai_api_key.clone() else {
-        return Ok(keyword_ranked_clauses(&approved, question, history));
+        return Err(missing_api_key_error());
     };
 
     let query = question_with_history(question, history);
     let embedding = embed_text(config, &api_key, &query).await?;
-    let mut matches = store::retrieve_clause_matches(&embedding, 8)
+    let matches = store::retrieve_clause_matches(&embedding, 8)
         .await
         .map_err(internal_error)?;
-    if matches.is_empty() {
-        matches = keyword_ranked_clauses(&approved, question, history);
-    } else {
-        rerank_keyword_hits(&mut matches, question, history);
-    }
     Ok(matches)
 }
 
@@ -137,93 +132,6 @@ pub fn retrieval_text_for_clause(clause: &Value) -> String {
         .filter(|section| !section.trim().is_empty())
         .collect::<Vec<_>>()
         .join("\n")
-}
-
-fn keyword_ranked_clauses(
-    clauses: &[Value],
-    question: &str,
-    history: &[crate::routes::question::ChatTurn],
-) -> Vec<Value> {
-    let scope = normalize_text(&question_with_history(question, history));
-    let mut scored = clauses
-        .iter()
-        .cloned()
-        .map(|mut clause| {
-            let haystack = normalize_text(&retrieval_text_for_clause(&clause));
-            let score = scope
-                .split_whitespace()
-                .filter(|token| token.len() >= 4 && haystack.contains(token))
-                .count() as f64;
-            if let Some(object) = clause.as_object_mut() {
-                object.insert(
-                    "_retrieval".to_string(),
-                    json!({
-                        "similarity": score,
-                        "method": "keyword"
-                    }),
-                );
-            }
-            (score, clause)
-        })
-        .collect::<Vec<_>>();
-    scored.sort_by(|left, right| {
-        right
-            .0
-            .partial_cmp(&left.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-    scored
-        .into_iter()
-        .take(8)
-        .map(|(_, clause)| clause)
-        .collect()
-}
-
-fn rerank_keyword_hits(
-    clauses: &mut [Value],
-    question: &str,
-    history: &[crate::routes::question::ChatTurn],
-) {
-    let scope = normalize_text(&question_with_history(question, history));
-    clauses.sort_by(|left, right| {
-        keyword_boost(right, &scope)
-            .cmp(&keyword_boost(left, &scope))
-            .then_with(|| {
-                similarity(right)
-                    .partial_cmp(&similarity(left))
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            })
-    });
-}
-
-fn keyword_boost(clause: &Value, scope: &str) -> usize {
-    [
-        clause
-            .get("clause_id")
-            .and_then(Value::as_str)
-            .unwrap_or(""),
-        clause.get("name").and_then(Value::as_str).unwrap_or(""),
-        clause
-            .get("clause_type")
-            .and_then(Value::as_str)
-            .unwrap_or(""),
-        clause
-            .get("party_name")
-            .and_then(Value::as_str)
-            .unwrap_or(""),
-    ]
-    .into_iter()
-    .map(normalize_text)
-    .filter(|value| !value.is_empty() && scope.contains(value))
-    .count()
-}
-
-fn similarity(clause: &Value) -> f64 {
-    clause
-        .get("_retrieval")
-        .and_then(|value| value.get("similarity"))
-        .and_then(Value::as_f64)
-        .unwrap_or_default()
 }
 
 fn question_with_history(question: &str, history: &[crate::routes::question::ChatTurn]) -> String {
@@ -316,17 +224,6 @@ async fn embed_text(
 
 fn hash_text(input: &str) -> String {
     format!("{:016x}", fnv1a_64(input.as_bytes()))
-}
-
-fn normalize_text(input: &str) -> String {
-    input
-        .to_ascii_lowercase()
-        .chars()
-        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { ' ' })
-        .collect::<String>()
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
 }
 
 fn fnv1a_64(bytes: &[u8]) -> u64 {

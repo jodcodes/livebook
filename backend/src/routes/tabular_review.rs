@@ -11,9 +11,10 @@ use std::{
     time::Duration,
 };
 use tokio::{fs, process::Command};
-use tracing::{instrument, warn};
+use tracing::instrument;
 use utoipa::ToSchema;
 
+use crate::openai::missing_api_key_error;
 use crate::repositories::store;
 use crate::routes::escalation::{
     CreateEscalationRequest, EscalationActor, EscalationLawyer, EscalationSource, queue_escalation,
@@ -612,58 +613,7 @@ async fn analyze_contract(
     playbook: &[Value],
 ) -> Result<Vec<TabularReviewRow>, (StatusCode, String)> {
     let relevant_playbook = relevant_playbook_for_contract(contract_text, playbook);
-    if std::env::var("OPENAI_API_KEY").is_ok() {
-        match analyze_contract_with_openai(
-            contract_id,
-            file_name,
-            contract_text,
-            &relevant_playbook,
-        )
-        .await
-        {
-            Ok(rows) => {
-                return Ok(rows_with_local_empty_fallback(
-                    rows,
-                    contract_id,
-                    file_name,
-                    contract_text,
-                    &relevant_playbook,
-                ));
-            }
-            Err((status, message)) => {
-                warn!(%status, %message, "OpenAI tabular review failed; using local fallback");
-            }
-        }
-    }
-    Ok(analyze_contract_locally(
-        contract_id,
-        file_name,
-        contract_text,
-        &relevant_playbook,
-    ))
-}
-
-fn rows_with_local_empty_fallback(
-    rows: Vec<TabularReviewRow>,
-    contract_id: &str,
-    file_name: &str,
-    contract_text: &str,
-    playbook: &[Value],
-) -> Vec<TabularReviewRow> {
-    if !rows.is_empty() {
-        return rows;
-    }
-
-    let fallback_rows = analyze_contract_locally(contract_id, file_name, contract_text, playbook);
-    if fallback_rows.is_empty() {
-        rows
-    } else {
-        warn!(
-            fallback_row_count = fallback_rows.len(),
-            "OpenAI tabular review returned no rows; using local fallback"
-        );
-        fallback_rows
-    }
+    analyze_contract_with_openai(contract_id, file_name, contract_text, &relevant_playbook).await
 }
 
 async fn analyze_contract_with_openai(
@@ -672,16 +622,11 @@ async fn analyze_contract_with_openai(
     contract_text: &str,
     playbook: &[Value],
 ) -> Result<Vec<TabularReviewRow>, (StatusCode, String)> {
-    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "OPENAI_API_KEY is not configured".to_string(),
-        )
-    })?;
+    let api_key = std::env::var("OPENAI_API_KEY").map_err(|_| missing_api_key_error())?;
     let playbook_json = serde_json::to_string_pretty(&compact_playbook(playbook))
         .unwrap_or_else(|_| "[]".to_string());
     let contract_text = truncate_for_prompt(contract_text, MAX_CONTRACT_PROMPT_CHARS);
-    let models = openai_tabular_model_candidates();
+    let model = openai_tabular_model();
     let prompt = format!(
         "Review one negotiated NDA against the current playbook.\n\
          Return JSON only, no markdown, with exact shape:\n\
@@ -706,35 +651,20 @@ async fn analyze_contract_with_openai(
                 format!("failed to build OpenAI HTTP client: {err}"),
             )
         })?;
-    let mut last_error = None;
-    for model in models {
-        match call_openai_tabular_model(&client, &api_key, &model, &prompt).await {
-            Ok(parsed) => {
-                return Ok(rows_from_extraction(
-                    contract_id,
-                    file_name,
-                    &parsed,
-                    playbook,
-                ));
-            }
-            Err(err) => {
-                let retry_next_model = is_model_access_error(&err.1);
-                last_error = Some(err);
-                if !retry_next_model {
-                    break;
-                }
-            }
-        }
-    }
-
-    Err(last_error.unwrap_or((
-        StatusCode::BAD_GATEWAY,
-        "OpenAI tabular review failed for all configured models".to_string(),
-    )))
+    let parsed = call_openai_tabular_model(&client, &api_key, &model, &prompt).await?;
+    Ok(rows_from_extraction(
+        contract_id,
+        file_name,
+        &parsed,
+        playbook,
+    ))
 }
 
-fn is_model_access_error(message: &str) -> bool {
-    message.contains("model_not_found") || message.contains("does not have access to model")
+fn openai_tabular_model() -> String {
+    std::env::var("OPENAI_TABULAR_MODEL")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_OPENAI_TABULAR_MODEL.to_string())
 }
 
 async fn call_openai_tabular_model(
@@ -788,60 +718,6 @@ async fn call_openai_tabular_model(
             format!("OpenAI output from {model} was not valid tabular review JSON: {err}"),
         )
     })
-}
-
-fn openai_tabular_model_candidates() -> Vec<String> {
-    if let Ok(value) = std::env::var("OPENAI_TABULAR_MODEL") {
-        let models = value
-            .split(',')
-            .map(str::trim)
-            .filter(|model| !model.is_empty())
-            .map(str::to_owned)
-            .collect::<Vec<_>>();
-        if !models.is_empty() {
-            return models;
-        }
-    }
-
-    vec![DEFAULT_OPENAI_TABULAR_MODEL.to_string()]
-}
-
-fn analyze_contract_locally(
-    contract_id: &str,
-    file_name: &str,
-    contract_text: &str,
-    playbook: &[Value],
-) -> Vec<TabularReviewRow> {
-    let lower_text = contract_text.to_ascii_lowercase();
-    let counterparty = infer_counterparty(contract_text)
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| display_name_from_filename(file_name));
-    let mut extraction_clauses = Vec::new();
-
-    for clause in playbook {
-        let clause_id = clause
-            .get("clause_id")
-            .and_then(Value::as_str)
-            .unwrap_or("");
-        if clause_id.is_empty() || !contract_matches_clause(&lower_text, clause) {
-            continue;
-        }
-        let outcome = infer_outcome_for_clause(&lower_text, clause);
-        extraction_clauses.push(json!({
-            "clause_id": clause_id,
-            "outcome": outcome,
-            "confidence": "medium",
-            "evidence": excerpt_for_clause(contract_text, clause),
-            "rationale": "Matched contract text against clause name, keywords, positions, or red line."
-        }));
-    }
-
-    rows_from_extraction(
-        contract_id,
-        file_name,
-        &json!({ "counterparty": counterparty, "clauses": extraction_clauses }),
-        playbook,
-    )
 }
 
 fn relevant_playbook_for_contract(contract_text: &str, playbook: &[Value]) -> Vec<Value> {
@@ -979,35 +855,7 @@ fn truncate_for_prompt(input: &str, max_chars: usize) -> String {
     output
 }
 
-fn contract_matches_clause(lower_text: &str, clause: &Value) -> bool {
-    let mut terms = Vec::new();
-    for key in ["name", "clause_type", "red_line", "escalation_trigger"] {
-        if let Some(value) = clause.get(key).and_then(Value::as_str) {
-            terms.push(value.to_ascii_lowercase());
-        }
-    }
-    if let Some(positions) = clause.get("positions").and_then(Value::as_object) {
-        for value in positions.values().filter_map(Value::as_str) {
-            terms.push(value.to_ascii_lowercase());
-        }
-    }
-    if let Some(keywords) = clause.get("keywords").and_then(Value::as_array) {
-        for value in keywords.iter().filter_map(Value::as_str) {
-            terms.push(value.to_ascii_lowercase());
-        }
-    }
-
-    terms
-        .into_iter()
-        .flat_map(|term| {
-            term.split(|ch: char| !ch.is_ascii_alphanumeric())
-                .filter(|part| part.len() > 4)
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .any(|term| lower_text.contains(&term))
-}
-
+#[cfg(test)]
 fn infer_outcome_for_clause(lower_text: &str, clause: &Value) -> &'static str {
     let clause_context = [
         clause.get("name").and_then(Value::as_str).unwrap_or(""),
@@ -1031,48 +879,16 @@ fn infer_outcome_for_clause(lower_text: &str, clause: &Value) -> &'static str {
     {
         return "red_line_breached";
     }
-    if lower_text.contains("fallback 2") || lower_text.contains("fallback_2") {
-        return "fallback_2";
-    }
-    if lower_text.contains("fallback 1")
-        || lower_text.contains("fallback_1")
-        || lower_text.contains("fallback")
-    {
-        return "fallback_1";
-    }
     "preferred"
 }
 
+#[cfg(test)]
 fn shared_token_count(haystack: &str, needle: &str) -> usize {
     needle
         .split(|ch: char| !ch.is_ascii_alphanumeric())
         .filter(|part| part.len() > 4)
         .filter(|part| haystack.contains(part))
         .count()
-}
-
-fn excerpt_for_clause(contract_text: &str, clause: &Value) -> String {
-    let lower = contract_text.to_ascii_lowercase();
-    let candidates = clause
-        .get("keywords")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(Value::as_str)
-        .chain(clause.get("name").and_then(Value::as_str))
-        .map(|value| value.to_ascii_lowercase())
-        .collect::<Vec<_>>();
-    for candidate in candidates {
-        if candidate.is_empty() {
-            continue;
-        }
-        if let Some(start) = lower.find(&candidate) {
-            let start = start.saturating_sub(120);
-            let end = (start + 700).min(contract_text.len());
-            return contract_text[start..end].trim().to_string();
-        }
-    }
-    contract_text.chars().take(700).collect()
 }
 
 fn normalize_outcome(value: Option<&str>) -> String {
@@ -1367,20 +1183,6 @@ fn append_negotiation_history_once(clause: &mut Value, history_entry: Value) {
     }
 }
 
-fn infer_counterparty(text: &str) -> Option<String> {
-    for marker in ["Counterparty:", "Customer:", "Client:", "Party:"] {
-        if let Some(after) = text.split(marker).nth(1) {
-            return after
-                .lines()
-                .next()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .map(str::to_owned);
-        }
-    }
-    None
-}
-
 fn display_name_from_filename(file_name: &str) -> String {
     let stem = file_name
         .rsplit_once('.')
@@ -1568,8 +1370,6 @@ mod tests {
     #[test]
     fn outcome_score_uses_fixed_ordinal_mapping() {
         assert_eq!(outcome_score("preferred"), 0);
-        assert_eq!(outcome_score("fallback_1"), 1);
-        assert_eq!(outcome_score("fallback_2"), 2);
         assert_eq!(outcome_score("red_line_breached"), 3);
     }
 
@@ -1587,7 +1387,7 @@ mod tests {
             "high"
         )])));
         assert!(session_has_deviations(&sample_session(vec![sample_row(
-            "fallback_1",
+            "red_line_breached",
             "high"
         )])));
     }
@@ -1596,21 +1396,20 @@ mod tests {
     fn metrics_count_red_lines_and_average_deviation() {
         let mut session = sample_session(vec![
             sample_row("preferred", "high"),
-            sample_row("fallback_1", "high"),
             sample_row("red_line_breached", "high"),
         ]);
         session.metrics = calculate_metrics(&session);
 
         assert_eq!(session.metrics.contract_count, 1);
-        assert_eq!(session.metrics.matched_clause_count, 3);
+        assert_eq!(session.metrics.matched_clause_count, 2);
         assert_eq!(session.metrics.red_line_breaches, 1);
-        assert_eq!(session.metrics.fallback_rows, 1);
-        assert_eq!(session.metrics.average_deviation, 1.33);
+        assert_eq!(session.metrics.fallback_rows, 0);
+        assert_eq!(session.metrics.average_deviation, 1.5);
     }
 
     #[test]
     fn low_confidence_rows_are_skipped_by_default() {
-        let row = sample_row("fallback_1", "low");
+        let row = sample_row("preferred", "low");
         assert!(!should_apply_row(&row, None, false));
         assert!(should_apply_row(&row, None, true));
     }
@@ -1628,8 +1427,8 @@ mod tests {
             &json!({
                 "counterparty": "Acme",
                 "clauses": [
-                    { "clause_id": "C01", "outcome": "fallback 1", "confidence": "high" },
-                    { "clause_id": "UNKNOWN", "outcome": "fallback_2", "confidence": "high" }
+                    { "clause_id": "C01", "outcome": "preferred", "confidence": "high" },
+                    { "clause_id": "UNKNOWN", "outcome": "red_line_breached", "confidence": "high" }
                 ]
             }),
             &playbook,
@@ -1637,53 +1436,8 @@ mod tests {
 
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].clause_id, "C01");
-        assert_eq!(rows[0].outcome, "fallback_1");
+        assert_eq!(rows[0].outcome, "preferred");
         assert_eq!(rows[0].playbook_version, 2);
-    }
-
-    #[test]
-    fn empty_openai_rows_use_local_fallback_when_text_matches_playbook() {
-        let playbook = vec![json!({
-            "clause_id": "NDA-01",
-            "name": "Marking of Confidential Info",
-            "clause_type": "Confidentiality",
-            "keywords": ["marking", "confidential information"],
-            "positions": {
-                "preferred": "Require confidential information to be marked Confidential."
-            },
-            "meta": { "version": 2 }
-        })];
-
-        let rows = rows_with_local_empty_fallback(
-            Vec::new(),
-            "contract-1",
-            "word-document",
-            "This Non-Disclosure Agreement protects confidential information and includes a marking process.",
-            &playbook,
-        );
-
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].clause_id, "NDA-01");
-        assert_eq!(rows[0].playbook_version, 2);
-    }
-
-    #[test]
-    fn empty_openai_rows_stay_empty_when_local_fallback_has_no_match() {
-        let playbook = vec![json!({
-            "clause_id": "NDA-01",
-            "name": "Marking of Confidential Info",
-            "keywords": ["confidential information"]
-        })];
-
-        let rows = rows_with_local_empty_fallback(
-            Vec::new(),
-            "contract-1",
-            "word-document",
-            "A short services schedule about delivery milestones.",
-            &playbook,
-        );
-
-        assert!(rows.is_empty());
     }
 
     #[test]
@@ -1740,7 +1494,7 @@ mod tests {
         let entry = json!({
             "contract_id": "TR-1:contract",
             "review_session_id": "TR-1",
-            "outcome": "fallback_1"
+            "outcome": "preferred"
         });
 
         append_negotiation_history_once(&mut clause, entry.clone());
@@ -1759,25 +1513,5 @@ mod tests {
 
         assert!(truncated.starts_with("aaaaa"));
         assert!(truncated.contains("TRUNCATED"));
-    }
-
-    #[test]
-    fn model_candidates_can_be_configured_as_csv() {
-        unsafe {
-            std::env::set_var("OPENAI_TABULAR_MODEL", "model-a, model-b");
-        }
-        let candidates = openai_tabular_model_candidates();
-        unsafe {
-            std::env::remove_var("OPENAI_TABULAR_MODEL");
-        }
-
-        assert_eq!(candidates, vec!["model-a", "model-b"]);
-    }
-
-    #[test]
-    fn model_retry_only_for_access_errors() {
-        assert!(is_model_access_error("model_not_found"));
-        assert!(is_model_access_error("does not have access to model `x`"));
-        assert!(!is_model_access_error("request timed out"));
     }
 }
