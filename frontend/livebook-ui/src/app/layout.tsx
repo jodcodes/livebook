@@ -3,6 +3,7 @@ import "./globals.css";
 import AgentationWrapper from "../components/AgentationWrapper";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { LocaleProvider } from "./context/LocaleContext";
 
 export const metadata: Metadata = {
   title: "Livebook",
@@ -15,12 +16,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="h-full antialiased">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
       <body className="min-h-full flex flex-col font-sans">
-        <TooltipProvider delayDuration={250}>
-          {children}
-          <Toaster position="top-right" />
-        </TooltipProvider>
+        <LocaleProvider>
+          <TooltipProvider delayDuration={250}>
+            {children}
+            <Toaster position="top-right" />
+          </TooltipProvider>
+        </LocaleProvider>
         <AgentationWrapper />
       </body>
     </html>

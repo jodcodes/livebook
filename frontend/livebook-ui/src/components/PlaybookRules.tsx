@@ -2,7 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../app/context/AuthContext";
+import { useLocale } from "@/app/context/LocaleContext";
 import PlaybookUploadModal from "./PlaybookUploadModal";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldContent, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { FilterBar, Notice, PageHeader, Panel, PremiumEmpty, SearchField, StatusBadge } from "@/components/premium";
+import { cn } from "@/lib/utils";
 
 const API_BASE = "/api/backend";
 const SIEMENS_LAW_TYPES = [
@@ -137,12 +146,6 @@ function matchesClauseRef(clause: Clause, clauseRef: string) {
     });
 }
 
-function formatLabel(value: string) {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function extractRuleNumberParts(value?: string): number[] | null {
   const match = value?.match(/\d+(?:[._-]\d+)*/);
   if (!match) return null;
@@ -205,6 +208,7 @@ function compareClausesByRuleNumber(a: Clause, b: Clause) {
 
 export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) {
   const { clearPlaybookClauseSelection, selectedPlaybookClauseRef, userRole } = useAuth();
+  const { t, formatEnumLabel } = useLocale();
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -384,7 +388,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
       );
       setSelectedClause(updated);
       setDraft(clauseDraft(updated));
-      setNotice("Clause updated.");
+      setNotice(t("Clause updated."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -393,142 +397,147 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
     }
   }
 
+  const draftLawTypeValue = draft?.law_type || "__unassigned";
+
   return (
     <div className="flex h-screen flex-col bg-background">
-      <header className="flex shrink-0 items-center justify-between border-b border-border bg-card px-6 py-4">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Playbook Rules</h2>
-          <p className="text-sm text-muted-foreground">
-            {readOnly
-              ? "Switch opposite-party playbooks, filter clauses, and view approved fields"
-              : "Switch opposite-party playbooks, filter clauses, and update fields"}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-muted-foreground">
-            {filteredClauses.length} of {clauses.length} clauses
-          </span>
-          {readOnly && (
-            <span className="rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-muted-foreground">
-              Read-only
-            </span>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowUpload(true)}
-            className="rounded-lg bg-livebook px-4 py-2 text-sm font-semibold text-white hover:bg-livebook-dark"
-          >
-            <i className="ri-upload-cloud-2-line mr-2" />
-            New playbook
-          </button>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={t("Legal control")}
+        title={t("Playbook Rules")}
+        description={
+          readOnly
+            ? t("Switch opposite-party playbooks, filter clauses, and view approved fields")
+            : t("Switch opposite-party playbooks, filter clauses, and update fields")
+        }
+        actions={
+          <>
+            <StatusBadge tone="neutral">
+              {filteredClauses.length} / {clauses.length} {t("Clauses")}
+            </StatusBadge>
+            {readOnly ? <StatusBadge tone="warning">{t("Read-only")}</StatusBadge> : null}
+            <Button type="button" onClick={() => setShowUpload(true)}>
+              <i className="ri-upload-cloud-2-line" data-icon="inline-start" />
+              {t("New playbook")}
+            </Button>
+          </>
+        }
+      />
 
-      <div className="shrink-0 space-y-3 border-b border-border bg-card px-6 py-3">
-        <div className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(220px,1fr)_240px_220px_220px_220px]">
-          <div className="relative">
-            <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70" />
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Search clauses, positions, red lines, keywords..."
-              className="w-full rounded-lg border border-border bg-muted/40 py-2 pl-10 pr-4 text-sm text-foreground outline-none transition-all focus:border-livebook focus:ring-2 focus:ring-livebook/20"
-            />
-          </div>
-          <select
-            value={activePlaybookId}
-            onChange={(event) => setActivePlaybookId(event.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 outline-none focus:border-livebook"
-          >
-            <option value="all">All playbooks</option>
-            {playbooks.map((playbook) => (
-              <option key={playbook.id} value={playbook.id}>
-                {playbook.name} ({playbook.law_type ?? "General Commercial"})
-              </option>
-            ))}
-          </select>
-          <select
-            value={activeLawType}
-            onChange={(event) => setActiveLawType(event.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 outline-none focus:border-livebook"
-          >
-            <option value="all">All Livebook law domains</option>
-            {lawTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <select
-            value={activePartyName}
-            onChange={(event) => setActivePartyName(event.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 outline-none focus:border-livebook"
-          >
-            <option value="all">All opposite parties</option>
-            {partyNames.map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
-          <select
-            value={activeClauseType}
-            onChange={(event) => setActiveClauseType(event.target.value)}
-            className="rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 outline-none focus:border-livebook"
-          >
-            <option value="all">All clause types</option>
-            {clauseTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+      <FilterBar className="flex flex-col gap-3">
+        <div className="grid w-full min-w-0 grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_240px_220px_220px_220px]">
+          <SearchField
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder={t("Search clauses, positions, red lines, keywords...")}
+          />
+          <Select value={activePlaybookId} onValueChange={setActivePlaybookId}>
+            <SelectTrigger className="h-9 w-full bg-background">
+              <SelectValue placeholder={t("All playbooks")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">{t("All playbooks")}</SelectItem>
+                {playbooks.map((playbook) => (
+                  <SelectItem key={playbook.id} value={playbook.id}>
+                    {playbook.name} ({playbook.law_type ?? t("General Commercial")})
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={activeLawType} onValueChange={setActiveLawType}>
+            <SelectTrigger className="h-9 w-full bg-background">
+              <SelectValue placeholder={t("All Livebook law domains")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">{t("All Livebook law domains")}</SelectItem>
+                {lawTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={activePartyName} onValueChange={setActivePartyName}>
+            <SelectTrigger className="h-9 w-full bg-background">
+              <SelectValue placeholder={t("All opposite parties")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">{t("All opposite parties")}</SelectItem>
+                {partyNames.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Select value={activeClauseType} onValueChange={setActiveClauseType}>
+            <SelectTrigger className="h-9 w-full bg-background">
+              <SelectValue placeholder={t("All clause types")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                <SelectItem value="all">{t("All clause types")}</SelectItem>
+                {clauseTypes.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
         </div>
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error}
-          </div>
-        )}
-      </div>
+        {error ? <Notice tone="danger">{error}</Notice> : null}
+      </FilterBar>
 
       <main className="grid min-h-0 flex-1 grid-cols-1 overflow-hidden xl:grid-cols-[minmax(360px,480px)_1fr]">
-        <section className="min-h-0 overflow-y-auto border-r border-border bg-card">
+        <section className="min-h-0 overflow-y-auto border-r border-border bg-card/92">
           {isLoading && clauses.length === 0 ? (
-            <div className="p-6 text-sm text-muted-foreground">Loading playbooks...</div>
+            <div className="p-6 text-sm text-muted-foreground">{t("Loading playbooks...")}</div>
           ) : filteredClauses.length === 0 ? (
-            <div className="flex h-full items-center justify-center p-8 text-center text-sm text-muted-foreground">
-              No clauses match the current filters.
+            <div className="flex h-full items-center justify-center p-6">
+              <PremiumEmpty
+                icon={<i className="ri-book-open-line text-base" />}
+                title={t("No clauses match the current filters.")}
+                description={t("Try adjusting your search or filter criteria.")}
+                className="w-full"
+              />
             </div>
           ) : (
             <div className="divide-y divide-border">
               {filteredClauses.map((clause) => (
-                <button
+                <Button
                   key={clause.clause_id}
                   type="button"
+                  variant="ghost"
                   onClick={() => loadClause(clause.clause_id)}
-                  className={`w-full px-5 py-4 text-left transition-colors hover:bg-muted/40 ${
-                    selectedId === clause.clause_id ? "bg-livebook-pale/60" : ""
-                  }`}
+                  className={cn(
+                    "h-auto w-full flex-col items-stretch justify-start rounded-none px-5 py-4 text-left hover:bg-muted/40",
+                    selectedId === clause.clause_id && "bg-livebook-pale/70 text-livebook-dark"
+                  )}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-sm font-semibold text-foreground">{clause.name}</p>
                       <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">
-                        {clause.positions?.preferred ?? "No preferred position"}
+                        {clause.positions?.preferred ?? t("No preferred position")}
                       </p>
                     </div>
-                    <span className="shrink-0 rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-                      {clause.clause_type ?? "General"}
-                    </span>
+                    <StatusBadge tone="neutral" className="shrink-0">
+                      {clause.clause_type ?? t("General")}
+                    </StatusBadge>
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
                     <span className="font-mono">{clause.original_clause_id ?? clause.clause_id}</span>
-                    <span>{clause.playbook_name ?? "Default Playbook"}</span>
-                    <span>{clause.law_type ?? "General Commercial"}</span>
-                    <span>{clause.party_name ?? "Opposite party"}</span>
+                    <span>{clause.playbook_name ?? t("Default Playbook")}</span>
+                    <span>{clause.law_type ?? t("General Commercial")}</span>
+                    <span>{clause.party_name ?? t("Opposite party")}</span>
                   </div>
-                </button>
+                </Button>
               ))}
             </div>
           )}
@@ -536,15 +545,18 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
 
         <section className="min-h-0 overflow-y-auto p-6">
           {!selectedClause || !draft ? (
-            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border bg-card text-sm text-muted-foreground">
-              {readOnly
-                ? "Select a clause to view every field."
-                : "Select a clause to view and update every field."}
-            </div>
+            <PremiumEmpty
+              icon={<i className="ri-file-list-3-line text-base" />}
+              title={readOnly ? t("Select a clause to view every field.") : t("Select a clause to view and update every field.")}
+              description={t("Use filters on the left to narrow the playbook rules.")}
+              className="h-full"
+            />
           ) : (
-            <div className="mx-auto max-w-5xl space-y-5">
-              <div className="rounded-lg border border-border bg-card p-5">
-                <div className="flex items-start justify-between gap-4">
+            <div className="mx-auto flex max-w-5xl flex-col gap-5">
+              <Panel
+                contentClassName="p-5"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="font-mono text-xs text-muted-foreground">
                       {selectedClause.original_clause_id ?? selectedClause.clause_id}
@@ -553,82 +565,83 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       {selectedClause.name}
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {selectedClause.playbook_name ?? "Default Playbook"} ·{" "}
-                      {selectedClause.law_type ?? "General Commercial"} ·{" "}
-                      {selectedClause.party_name ?? "Opposite party"} · v
+                      {selectedClause.playbook_name ?? t("Default Playbook")} ·{" "}
+                      {selectedClause.law_type ?? t("General Commercial")} ·{" "}
+                      {selectedClause.party_name ?? t("Opposite party")} · v
                       {selectedClause.meta?.version ?? 1}
                     </p>
                   </div>
                   {readOnly ? (
-                    <span className="rounded-full border border-border bg-muted/40 px-3 py-1 text-xs font-semibold text-muted-foreground">
-                      Read-only access
-                    </span>
+                    <StatusBadge tone="warning">{t("Read-only")}</StatusBadge>
                   ) : (
-                    <div className="flex gap-2">
-                      <button
+                    <div className="flex flex-wrap gap-2">
+                      <Button
                         type="button"
+                        variant="outline"
                         onClick={() => setDraft(clauseDraft(selectedClause))}
-                        className="rounded-lg border border-border px-3 py-2 text-xs font-semibold text-muted-foreground"
                       >
-                        Reset
-                      </button>
-                      <button
+                        {t("Reset")}
+                      </Button>
+                      <Button
                         type="button"
                         onClick={saveDraft}
                         disabled={isSaving}
-                        className="rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-white disabled:opacity-60"
                       >
-                        {isSaving ? "Saving..." : "Save changes"}
-                      </button>
+                        {isSaving ? `${t("Save")}...` : t("Save")}
+                      </Button>
                     </div>
                   )}
                 </div>
-                {notice && (
-                  <div className="mt-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
-                    {notice}
-                  </div>
-                )}
-              </div>
+                {notice ? <Notice tone="success" className="mt-4">{notice}</Notice> : null}
+              </Panel>
 
-              <div className="rounded-lg border border-border bg-card p-5">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Name
-                    <input
+              <Panel>
+                <FieldGroup className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <Field>
+                    <FieldLabel>{t("Name")}</FieldLabel>
+                    <Input
                       value={draft.name ?? ""}
                       onChange={(event) => updateDraftField("name", event.target.value)}
                       readOnly={readOnly}
-                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
                     />
-                  </label>
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Clause type
-                    <input
+                  </Field>
+                  <Field>
+                    <FieldLabel>
+                      {t("Clause type")}
+                    </FieldLabel>
+                    <Input
                       value={draft.clause_type ?? ""}
                       onChange={(event) => updateDraftField("clause_type", event.target.value)}
                       readOnly={readOnly}
-                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
                     />
-                  </label>
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Livebook law domain
-                    <select
-                      value={draft.law_type ?? ""}
-                      onChange={(event) => updateDraftField("law_type", event.target.value)}
+                  </Field>
+                  <Field>
+                    <FieldLabel>{t("Domain")}</FieldLabel>
+                    <Select
+                      value={draftLawTypeValue}
+                      onValueChange={(value) =>
+                        updateDraftField("law_type", value === "__unassigned" ? "" : value)
+                      }
                       disabled={readOnly}
-                      className="mt-1 w-full rounded-lg border border-border bg-card px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook disabled:bg-muted/40"
                     >
-                      <option value="">Unassigned</option>
-                      {SIEMENS_LAW_TYPES.map((type) => (
-                        <option key={type} value={type}>
-                          {type}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="text-xs font-semibold text-muted-foreground md:col-span-2">
-                    Keywords
-                    <input
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value="__unassigned">{t("Not set")}</SelectItem>
+                          {SIEMENS_LAW_TYPES.map((type) => (
+                            <SelectItem key={type} value={type}>
+                              {type}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </Field>
+                  <Field className="md:col-span-2">
+                    <FieldLabel>{t("Keywords")}</FieldLabel>
+                    <Input
                       value={(draft.keywords ?? []).join(", ")}
                       onChange={(event) =>
                         updateDraftField(
@@ -640,61 +653,59 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                         )
                       }
                       readOnly={readOnly}
-                      className="mt-1 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
                     />
-                  </label>
+                  </Field>
                   {(["preferred", "fallback_1", "fallback_2"] as const).map((field) => (
-                    <label key={field} className="text-xs font-semibold text-muted-foreground">
-                      {formatLabel(field)}
-                      <textarea
+                    <Field key={field}>
+                      <FieldLabel>{formatEnumLabel(field)}</FieldLabel>
+                      <Textarea
                         value={draft.positions?.[field] ?? ""}
                         onChange={(event) => updatePositionField(field, event.target.value)}
                         readOnly={readOnly}
-                        className="mt-1 h-28 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
+                        className="min-h-28"
                       />
-                    </label>
+                    </Field>
                   ))}
-                  <label className="text-xs font-semibold text-muted-foreground">
-                    Red line
-                    <textarea
+                  <Field>
+                    <FieldLabel>{t("Red line")}</FieldLabel>
+                    <Textarea
                       value={draft.red_line ?? ""}
                       onChange={(event) => updateDraftField("red_line", event.target.value)}
                       readOnly={readOnly}
-                      className="mt-1 h-28 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
+                      className="min-h-28"
                     />
-                  </label>
-                  <label className="text-xs font-semibold text-muted-foreground md:col-span-2">
-                    Escalation trigger
-                    <textarea
+                  </Field>
+                  <Field className="md:col-span-2">
+                    <FieldLabel>{t("Escalation trigger")}</FieldLabel>
+                    <Textarea
                       value={draft.escalation_trigger ?? ""}
                       onChange={(event) =>
                         updateDraftField("escalation_trigger", event.target.value)
                       }
                       readOnly={readOnly}
-                      className="mt-1 h-24 w-full rounded-lg border border-border px-3 py-2 text-sm font-normal text-foreground outline-none focus:border-livebook"
+                      className="min-h-24"
                     />
-                  </label>
-                  <label className="flex items-center gap-2 text-sm font-semibold text-foreground/80">
-                    <input
-                      type="checkbox"
+                  </Field>
+                  <Field orientation="horizontal" className="md:col-span-2">
+                    <Checkbox
                       checked={Boolean(draft.always_escalate)}
-                      onChange={(event) =>
-                        updateDraftField("always_escalate", event.target.checked)
+                      onCheckedChange={(checked) =>
+                        updateDraftField("always_escalate", checked === true)
                       }
                       disabled={readOnly}
-                      className="h-4 w-4"
                     />
-                    Always escalate
-                  </label>
-                </div>
-              </div>
+                    <FieldContent>
+                      <FieldTitle>{t("Always escalate")}</FieldTitle>
+                    </FieldContent>
+                  </Field>
+                </FieldGroup>
+              </Panel>
 
-              <div className="rounded-lg border border-border bg-card p-5">
-                <h3 className="font-semibold text-foreground">Source Excerpt</h3>
+              <Panel title={t("Source Excerpt")}>
                 <p className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap rounded-lg bg-muted/40 p-3 text-xs leading-relaxed text-foreground/80">
-                  {selectedClause.raw_source_segment || "No source text available"}
+                  {selectedClause.raw_source_segment || t("No source text available")}
                 </p>
-              </div>
+              </Panel>
             </div>
           )}
         </section>

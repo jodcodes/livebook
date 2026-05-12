@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useLocale } from "@/app/context/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { localReviewer } from "@/lib/actorDefaults";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -124,13 +125,6 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-function formatDate(value: string) {
-  if (!value) return "Not Available";
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-  return parsed.toLocaleString();
-}
-
 function clauseDraft(clause: ReviewClause) {
   return {
     name: clause.name ?? "",
@@ -146,27 +140,21 @@ function clauseDraft(clause: ReviewClause) {
   };
 }
 
-function formatLabel(value: string) {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+function actorName(actor: EscalationActor, t: (key: string) => string) {
+  return actor.display_name || actor.email || t("Business User");
 }
 
-function actorName(actor: EscalationActor) {
-  return actor.display_name || actor.email || "Business User";
-}
-
-function tabularReviewTitle(item: EscalationItem) {
+function tabularReviewTitle(item: EscalationItem, t: (key: string) => string) {
   const deviationCount = item.answer.match(/found (\d+) deviation/i)?.[1];
   const files = item.answer.match(/Files:\s*(.+)$/i)?.[1]?.trim();
 
   if (item.created_from.source === "tabular_review") {
-    if (deviationCount && files) return `${deviationCount} deviations in ${files}`;
-    if (deviationCount) return `${deviationCount} tabular review deviations`;
-    return "Tabular review needs legal review";
+    if (deviationCount && files) return `${deviationCount} ${t("deviations in")} ${files}`;
+    if (deviationCount) return `${deviationCount} ${t("tabular review deviations")}`;
+    return t("Tabular review needs legal review");
   }
 
-  return item.clause_ref || "Chat escalation";
+  return item.clause_ref || t("Chat escalation");
 }
 
 function clauseRefParts(clauseRef: string) {
@@ -187,34 +175,44 @@ function shortClauseLabel(value: string) {
   return `${clauseId}: ${title.split(":")[0]}`;
 }
 
-function escalationClauseLabels(clauseRef: string) {
+function escalationClauseLabels(clauseRef: string, t: (key: string) => string) {
   const labels = clauseRefParts(clauseRef).map(shortClauseLabel);
-  return labels.length > 0 ? labels : ["Referenced clause"];
+  return labels.length > 0 ? labels : [t("Referenced clause")];
 }
 
-function sourceFilesLabel(files?: string[]) {
+function sourceFilesLabel(files?: string[], t?: (key: string) => string) {
   if (!files || files.length === 0) return "";
   if (files.length === 1) return files[0];
-  return `${files[0]} + ${files.length - 1} more`;
+  return `${files[0]} + ${files.length - 1} ${t ? t("more") : "more"}`;
 }
 
-function clauseSourceLabel(clause: ReviewClause) {
+function clauseSourceLabel(
+  clause: ReviewClause,
+  formatEnumLabel: (value: string) => string,
+  t: (key: string) => string
+) {
   const parts = [
     clause.playbook_name,
-    sourceFilesLabel(clause.source_files),
+    sourceFilesLabel(clause.source_files, t),
     clause.original_clause_id,
   ].filter(Boolean);
-  return parts.length > 0 ? parts.join(" · ") : clause.meta?.created_from ?? "playbook_ingest";
+  return parts.length > 0
+    ? parts.join(" · ")
+    : formatEnumLabel(clause.meta?.created_from ?? "playbook_ingest");
 }
 
-function clauseAttentionReason(clause: ReviewClause, hasPendingSuggestion: boolean) {
+function clauseAttentionReason(
+  clause: ReviewClause,
+  hasPendingSuggestion: boolean,
+  t: (key: string) => string
+) {
   const reviewStatus = clause.meta?.review_status ?? "pending";
-  if (hasPendingSuggestion) return "Evolve suggestion";
+  if (hasPendingSuggestion) return t("Evolve suggestion");
   if (reviewStatus !== "approved") {
-    if (clause.low_confidence) return "Low confidence extraction";
-    return "Pending clause review";
+    if (clause.low_confidence) return t("Low confidence extraction");
+    return t("Pending clause review");
   }
-  return "Open review item";
+  return t("Open review item");
 }
 
 function clauseNeedsAttention(clause: ReviewClause, hasPendingSuggestion: boolean) {
@@ -230,6 +228,7 @@ function uniqueCount(values: string[]) {
 }
 
 export default function ReviewPage() {
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
   const [clauses, setClauses] = useState<ReviewClause[]>([]);
   const [escalations, setEscalations] = useState<EscalationItem[]>([]);
   const [evolveSuggestions, setEvolveSuggestions] = useState<EvolveSuggestion[]>([]);
@@ -284,15 +283,15 @@ export default function ReviewPage() {
       .map((item) => ({
         type: "escalation",
         id: item.id,
-        title: tabularReviewTitle(item),
+        title: tabularReviewTitle(item, t),
         status: item.status,
         createdAt: item.created_at,
-        createdBy: actorName(item.created_by),
-        createdFrom: item.created_from.source || "chat",
-        playbookName: escalationClauseLabels(item.clause_ref).join(", "),
-        counterparty: actorName(item.created_by),
-        sourceLabel: `${item.created_from.source || "chat"} · ${item.created_from.message_id}`,
-        reason: "Chat escalation",
+        createdBy: actorName(item.created_by, t),
+        createdFrom: formatEnumLabel(item.created_from.source || "chat"),
+        playbookName: escalationClauseLabels(item.clause_ref, t).join(", "),
+        counterparty: actorName(item.created_by, t),
+        sourceLabel: `${formatEnumLabel(item.created_from.source || "chat")} · ${item.created_from.message_id}`,
+        reason: t("Chat escalation"),
         escalation: item,
       }));
 
@@ -308,18 +307,18 @@ export default function ReviewPage() {
           title: clause.name,
           status: clause.meta?.review_status ?? "pending",
           createdAt: clause.meta?.created_at ?? "",
-          createdBy: clause.meta?.created_by ?? clause.meta?.approved_by ?? "Legal Counsel",
-          createdFrom: clause.meta?.created_from ?? "playbook_ingest",
-          playbookName: clause.playbook_name ?? "Default Playbook",
-          counterparty: clause.party_name ?? "Unknown counterparty",
-          sourceLabel: clauseSourceLabel(clause),
-          reason: clauseAttentionReason(clause, hasPendingSuggestion),
+          createdBy: clause.meta?.created_by ?? clause.meta?.approved_by ?? t("Legal Counsel"),
+          createdFrom: formatEnumLabel(clause.meta?.created_from ?? "playbook_ingest"),
+          playbookName: clause.playbook_name ?? t("Default Playbook"),
+          counterparty: clause.party_name ?? `${t("Unknown")} ${t("Counterparty").toLowerCase()}`,
+          sourceLabel: clauseSourceLabel(clause, formatEnumLabel, t),
+          reason: clauseAttentionReason(clause, hasPendingSuggestion, t),
           clause,
         };
       });
 
     return [...escalationItems, ...clauseItems];
-  }, [clauses, escalations, evolveSuggestions]);
+  }, [clauses, escalations, evolveSuggestions, formatEnumLabel, t]);
 
   const dashboardStats = useMemo(
     () => ({
@@ -334,6 +333,13 @@ export default function ReviewPage() {
 
   const boundedActiveIndex = Math.min(activeIndex, Math.max(items.length - 1, 0));
   const activeItem = items[boundedActiveIndex];
+  const formatReviewDate = useCallback(
+    (value: string) => {
+      if (!value) return t("Not Available");
+      return formatDateTime(value);
+    },
+    [formatDateTime, t]
+  );
 
   const goNext = useCallback(() => {
     setDirection("next");
@@ -462,14 +468,14 @@ export default function ReviewPage() {
       <div className="mx-auto flex h-full w-full max-w-7xl flex-col">
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
-              Human-in-the-loop
+              <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
+              {t("Human-in-the-loop")}
             </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">Review Queue</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("Review Queue")}</h1>
             <p className="text-sm text-muted-foreground">
               {items.length === 0
-                ? "No open review items"
-                : `${dashboardStats.total} items need attention`}
+                ? t("No open review items")
+                : `${dashboardStats.total} ${t("items need attention")}`}
             </p>
           </div>
           {detailOpen && activeItem && (
@@ -480,7 +486,7 @@ export default function ReviewPage() {
                 onClick={() => setDetailOpen(false)}
               >
                 <i className="ri-arrow-left-line text-base" data-icon="inline-start" />
-                Back to queue
+                {t("Back to queue")}
               </Button>
               <Button
                 type="button"
@@ -488,7 +494,7 @@ export default function ReviewPage() {
                 onClick={goPrev}
                 disabled={boundedActiveIndex === 0 || items.length === 0}
               >
-                Previous
+                {t("Previous")}
               </Button>
               <Button
                 type="button"
@@ -496,7 +502,7 @@ export default function ReviewPage() {
                 onClick={goNext}
                 disabled={boundedActiveIndex >= items.length - 1}
               >
-                Next
+                {t("Next")}
                 <i className="ri-arrow-right-line text-base" data-icon="inline-end" />
               </Button>
             </div>
@@ -506,12 +512,12 @@ export default function ReviewPage() {
         {error && <Notice tone="danger" className="mb-4">{error}</Notice>}
 
         {isLoading && items.length === 0 ? (
-          <Notice tone="neutral">Loading review queue...</Notice>
+          <Notice tone="neutral">{t("Loading review queue...")}</Notice>
         ) : items.length === 0 ? (
           <PremiumEmpty
             icon={<i className="ri-clipboard-line text-base" />}
-            title="No review items"
-            description="No clauses or escalations are available for review."
+            title={t("No review items")}
+            description={t("No clauses or escalations are available for review.")}
           />
         ) : !detailOpen || !activeItem ? (
           <AttentionDashboard
@@ -533,15 +539,15 @@ export default function ReviewPage() {
               </div>
               <dl className="grid grid-cols-1 gap-2 text-xs text-muted-foreground sm:grid-cols-3">
                 <div>
-                  <dt className="font-semibold text-foreground">Created</dt>
-                  <dd>{formatDate(activeItem.createdAt)}</dd>
+                  <dt className="font-semibold text-foreground">{t("Created")}</dt>
+                  <dd>{formatReviewDate(activeItem.createdAt)}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-foreground">By</dt>
+                  <dt className="font-semibold text-foreground">{t("By")}</dt>
                   <dd>{activeItem.createdBy}</dd>
                 </div>
                 <div>
-                  <dt className="font-semibold text-foreground">Source</dt>
+                  <dt className="font-semibold text-foreground">{t("Source")}</dt>
                   <dd>{activeItem.sourceLabel || activeItem.createdFrom}</dd>
                 </div>
               </dl>
@@ -553,6 +559,8 @@ export default function ReviewPage() {
                   escalation={activeItem.escalation}
                   onApprove={() => resolveEscalation(activeItem.escalation.id)}
                   onDecline={() => declineEscalation(activeItem.escalation.id)}
+                  t={t}
+                  formatEnumLabel={formatEnumLabel}
                 />
               ) : (
                 <ClauseReview
@@ -561,6 +569,8 @@ export default function ReviewPage() {
                   updateDraft={updateDraft}
                   onApprove={() => approve(activeItem.clause)}
                   onDecline={() => decline(activeItem.clause.clause_id)}
+                  t={t}
+                  formatEnumLabel={formatEnumLabel}
                 />
               )}
             </div>
@@ -588,12 +598,20 @@ function AttentionDashboard({
   };
   onSelect: (index: number) => void;
 }) {
+  const { t, formatDateTime } = useLocale();
+  const formatReviewDate = useCallback(
+    (value: string) => {
+      if (!value) return t("Not Available");
+      return formatDateTime(value);
+    },
+    [formatDateTime, t]
+  );
   const cards = [
-    { label: "Attention items", value: stats.total },
-    { label: "Clauses", value: stats.clausesPending },
-    { label: "Escalations", value: stats.escalations },
-    { label: "Playbooks", value: stats.playbooks },
-    { label: "Counterparties", value: stats.counterparties },
+    { label: t("Attention items"), value: stats.total },
+    { label: t("Clauses"), value: stats.clausesPending },
+    { label: t("Escalations"), value: stats.escalations },
+    { label: t("Playbooks"), value: stats.playbooks },
+    { label: t("Counterparties"), value: stats.counterparties },
   ];
 
   return (
@@ -608,13 +626,13 @@ function AttentionDashboard({
         <table className="w-full min-w-[920px] border-collapse text-left text-sm">
           <thead className="sticky top-0 bg-muted text-xs font-semibold text-muted-foreground">
             <tr>
-              <th className="px-3 py-2">Item</th>
-              <th className="px-3 py-2">Playbook</th>
-              <th className="px-3 py-2">Counterparty</th>
-              <th className="px-3 py-2">Source</th>
-              <th className="px-3 py-2">By</th>
-              <th className="px-3 py-2">Created</th>
-              <th className="px-3 py-2">Reason</th>
+              <th className="px-3 py-2">{t("Item")}</th>
+              <th className="px-3 py-2">{t("Playbooks")}</th>
+              <th className="px-3 py-2">{t("Counterparty")}</th>
+              <th className="px-3 py-2">{t("Source")}</th>
+              <th className="px-3 py-2">{t("By")}</th>
+              <th className="px-3 py-2">{t("Created")}</th>
+              <th className="px-3 py-2">{t("Reason")}</th>
             </tr>
           </thead>
           <tbody>
@@ -632,7 +650,7 @@ function AttentionDashboard({
                 <td className="max-w-[160px] truncate px-3 py-2">{item.counterparty}</td>
                 <td className="max-w-[220px] truncate px-3 py-2">{item.sourceLabel}</td>
                 <td className="max-w-[140px] truncate px-3 py-2">{item.createdBy}</td>
-                <td className="whitespace-nowrap px-3 py-2">{formatDate(item.createdAt)}</td>
+                <td className="whitespace-nowrap px-3 py-2">{formatReviewDate(item.createdAt)}</td>
                 <td className="max-w-[160px] px-3 py-2">
                   <StatusBadge tone={statusTone(item.reason)}>{item.reason}</StatusBadge>
                 </td>
@@ -649,23 +667,27 @@ function EscalationReview({
   escalation,
   onApprove,
   onDecline,
+  t,
+  formatEnumLabel,
 }: {
   escalation: EscalationItem;
   onApprove: () => void;
   onDecline: () => void;
+  t: (key: string) => string;
+  formatEnumLabel: (value: string) => string;
 }) {
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
       <div className="flex flex-col gap-4">
         <section className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <h3 className="font-semibold text-red-900">Escalation Request</h3>
-          <p className="mt-2 text-sm text-red-900">{escalation.escalation_reason || "No reason entered"}</p>
+          <h3 className="font-semibold text-red-900">{t("Escalation Request")}</h3>
+          <p className="mt-2 text-sm text-red-900">{escalation.escalation_reason || t("No reason entered")}</p>
           <p className="mt-3 rounded-lg bg-card p-3 text-sm text-foreground">
             {escalation.question}
           </p>
         </section>
         <section className="rounded-lg border bg-card p-4">
-          <h3 className="font-semibold">Answer Context</h3>
+          <h3 className="font-semibold">{t("Answer Context")}</h3>
           <LegalTextPanel className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap text-sm">
             {escalation.answer}
           </LegalTextPanel>
@@ -674,29 +696,29 @@ function EscalationReview({
       </div>
       <aside className="flex flex-col gap-4">
         <section className="rounded-lg border bg-card p-4 text-sm">
-          <h3 className="font-semibold">Routing</h3>
+          <h3 className="font-semibold">{t("Routing")}</h3>
           <dl className="mt-3 flex flex-col gap-2 text-muted-foreground">
             <div>
-              <dt className="text-xs font-semibold text-foreground">Lawyer</dt>
+              <dt className="text-xs font-semibold text-foreground">{t("Lawyer")}</dt>
               <dd>{escalation.lawyer.display_name || escalation.lawyer.email}</dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-foreground">Notification</dt>
-              <dd>{escalation.notification?.status ?? "queued"}</dd>
+              <dt className="text-xs font-semibold text-foreground">{t("Notification")}</dt>
+              <dd>{formatEnumLabel(escalation.notification?.status ?? "queued")}</dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-foreground">Clauses</dt>
+              <dt className="text-xs font-semibold text-foreground">{t("Clauses")}</dt>
               <dd>
                 <ul className="flex flex-col gap-1">
-                  {escalationClauseLabels(escalation.clause_ref).map((label) => (
+                  {escalationClauseLabels(escalation.clause_ref, t).map((label) => (
                     <li key={label}>{label}</li>
                   ))}
                 </ul>
               </dd>
             </div>
             <div>
-              <dt className="text-xs font-semibold text-foreground">Position</dt>
-              <dd>{escalation.position_used}</dd>
+              <dt className="text-xs font-semibold text-foreground">{t("Position")}</dt>
+              <dd>{formatEnumLabel(escalation.position_used)}</dd>
             </div>
           </dl>
         </section>
@@ -707,14 +729,14 @@ function EscalationReview({
             onClick={onDecline}
           >
             <i className="ri-close-line text-base" data-icon="inline-start" />
-            Decline
+            {t("Reject")}
           </Button>
           <Button
             type="button"
             onClick={onApprove}
           >
             <i className="ri-check-line text-base" data-icon="inline-start" />
-            Approve
+            {t("Approve")}
           </Button>
         </div>
       </aside>
@@ -728,6 +750,8 @@ function ClauseReview({
   updateDraft,
   onApprove,
   onDecline,
+  t,
+  formatEnumLabel,
 }: {
   clause: ReviewClause;
   draft: ReturnType<typeof clauseDraft>;
@@ -737,16 +761,18 @@ function ClauseReview({
   ) => void;
   onApprove: () => void;
   onDecline: () => void;
+  t: (key: string) => string;
+  formatEnumLabel: (value: string) => string;
 }) {
   return (
     <>
       <div className="mb-4 text-xs font-semibold text-muted-foreground">
-        Version {clause.meta?.version ?? 1}
+        {t("Version")} {clause.meta?.version ?? 1}
       </div>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="text-xs font-semibold text-muted-foreground">
-          Name
+          {t("Name")}
           <Input
             value={draft.name ?? ""}
             onChange={(event) =>
@@ -756,7 +782,7 @@ function ClauseReview({
           />
         </label>
         <label className="text-xs font-semibold text-muted-foreground">
-          Keywords
+          {t("Keywords")}
           <Input
             value={(draft.keywords ?? []).join(", ")}
             onChange={(event) =>
@@ -770,7 +796,7 @@ function ClauseReview({
         </label>
         {(["preferred", "fallback_1", "fallback_2"] as const).map((field) => (
           <label key={field} className="text-xs font-semibold text-muted-foreground">
-            {formatLabel(field)}
+            {formatEnumLabel(field)}
             <Textarea
               value={draft.positions?.[field] ?? ""}
               onChange={(event) =>
@@ -789,7 +815,7 @@ function ClauseReview({
           </label>
         ))}
         <label className="text-xs font-semibold text-muted-foreground">
-          Red line
+          {t("Red line")}
           <Textarea
             value={draft.red_line ?? ""}
             onChange={(event) =>
@@ -799,7 +825,7 @@ function ClauseReview({
           />
         </label>
         <label className="text-xs font-semibold text-muted-foreground">
-          Escalation trigger
+          {t("Escalation trigger")}
           <Textarea
             value={draft.escalation_trigger ?? ""}
             onChange={(event) =>
@@ -821,7 +847,7 @@ function ClauseReview({
               }))
             }
           />
-          Always escalate
+          {t("Always escalate")}
         </label>
       </div>
       <div className="mt-5 flex justify-end gap-2">
@@ -831,14 +857,14 @@ function ClauseReview({
           onClick={onDecline}
         >
           <i className="ri-close-line text-base" data-icon="inline-start" />
-          Decline
+          {t("Reject")}
         </Button>
         <Button
           type="button"
           onClick={onApprove}
         >
           <i className="ri-check-line text-base" data-icon="inline-start" />
-          Approve
+          {t("Approve")}
         </Button>
       </div>
     </>

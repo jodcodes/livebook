@@ -3,7 +3,9 @@
 import { useState } from "react";
 
 import { useAuth } from "../app/context/AuthContext";
+import { useLocale } from "@/app/context/LocaleContext";
 import { Button } from "@/components/ui/button";
+import LanguageToggle from "@/components/LanguageToggle";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { StatusBadge } from "@/components/premium";
@@ -17,19 +19,18 @@ const baseNavItems = [
   { iconClass: "ri-table-line", label: "Tabular Review", view: "tabularReview" as const },
 ];
 
-const lawyerNavItems = [
-  ...baseNavItems,
-  { iconClass: "ri-flow-chart", label: "Review Queue", view: "review" as const },
-];
-
 export default function Sidebar() {
   const { signOut, userRole, currentView, setView } = useAuth();
+  const { t } = useLocale();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
-  const navItems = userRole === "lawyer" ? lawyerNavItems : baseNavItems;
-  const roleLabel = userRole === "business" ? "Business User" : "Legal Counsel";
+  const navItems =
+    userRole === "lawyer"
+      ? [...baseNavItems, { iconClass: "ri-flow-chart", label: "Review Queue", view: "review" as const }]
+      : baseNavItems;
+  const roleLabel = userRole === "business" ? t("Business User") : t("Legal Counsel");
   const roleIconClass = userRole === "business" ? "ri-briefcase-line" : "ri-scales-line";
-  const toggleLabel = isCollapsed ? "Expand sidebar" : "Collapse sidebar";
+  const toggleLabel = isCollapsed ? t("Expand sidebar") : t("Collapse sidebar");
 
   return (
     <aside
@@ -47,7 +48,7 @@ export default function Sidebar() {
             </div>
             <div className={cn("min-w-0 max-sm:sr-only", isCollapsed && "sr-only")}>
               <h1 className="truncate text-xl font-semibold tracking-tight">Livebook</h1>
-              <p className="truncate text-xs text-muted-foreground">Legal workspace</p>
+              <p className="truncate text-xs text-muted-foreground">{t("Legal workspace")}</p>
             </div>
           </div>
           <Button
@@ -98,7 +99,9 @@ export default function Sidebar() {
                 )}
               >
                 <i className={cn("text-base", item.iconClass)} data-icon="inline-start" />
-                <span className={cn("truncate", isCollapsed && "sr-only", "max-sm:sr-only")}>{item.label}</span>
+                <span className={cn("truncate", isCollapsed && "sr-only", "max-sm:sr-only")}>
+                  {t(item.label)}
+                </span>
               </Button>
             );
 
@@ -124,22 +127,29 @@ export default function Sidebar() {
             <p className="truncate text-sm font-medium">{roleLabel}</p>
             <p className="truncate text-xs text-muted-foreground">Livebook AG</p>
           </div>
-          <StatusBadge tone="accent" className={cn(isCollapsed && "sr-only", "max-sm:sr-only")}>Live</StatusBadge>
+          <StatusBadge tone="accent" className={cn(isCollapsed && "sr-only", "max-sm:sr-only")}>
+            {t("Live")}
+          </StatusBadge>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={signOut}
-          title={isCollapsed ? "Sign Out" : undefined}
-          className={cn(
-            "h-10 justify-start text-muted-foreground hover:text-foreground",
-            isCollapsed ? "w-full justify-center px-0" : "w-full px-3",
-            "max-sm:w-full max-sm:justify-center max-sm:px-0"
-          )}
-        >
-          <i className="ri-logout-box-line text-base" data-icon="inline-start" />
-          <span className={cn("truncate", isCollapsed && "sr-only", "max-sm:sr-only")}>Sign Out</span>
-        </Button>
+        <div className={cn("flex gap-2", isCollapsed ? "flex-col" : "items-center")}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={signOut}
+            title={isCollapsed ? t("Sign Out") : undefined}
+            className={cn(
+              "h-10 justify-start text-muted-foreground hover:text-foreground",
+              isCollapsed ? "w-full justify-center px-0" : "flex-1 px-3",
+              "max-sm:w-full max-sm:justify-center max-sm:px-0"
+            )}
+          >
+            <i className="ri-logout-box-line text-base" data-icon="inline-start" />
+            <span className={cn("truncate", isCollapsed && "sr-only", "max-sm:sr-only")}>
+              {t("Sign Out")}
+            </span>
+          </Button>
+          <LanguageToggle className={cn(isCollapsed ? "justify-center" : "shrink-0")} compact />
+        </div>
       </div>
     </aside>
   );

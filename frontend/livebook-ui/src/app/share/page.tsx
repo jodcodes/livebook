@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useLocale } from "@/app/context/LocaleContext";
 import { decodeSharePayload } from "@/lib/shareEncoding";
 
 interface SharedAnswer {
@@ -23,6 +24,7 @@ function readSharedAnswer(): SharedAnswer | null {
 }
 
 export default function SharePage() {
+  const { t } = useLocale();
   const answer = useMemo(() => readSharedAnswer(), []);
 
   return (
@@ -33,21 +35,21 @@ export default function SharePage() {
             <i className="ri-share-line text-xl" />
           </div>
           <div>
-            <h1 className="text-xl font-semibold">Shared Livebook Answer</h1>
-            <p className="text-sm text-muted-foreground">Static answer snapshot, no re-query.</p>
+            <h1 className="text-xl font-semibold">{t("Shared Livebook Answer")}</h1>
+            <p className="text-sm text-muted-foreground">{t("Static answer snapshot, no re-query.")}</p>
           </div>
         </div>
 
         {!answer ? (
           <p className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            Shared answer link is invalid or expired.
+            {t("Shared answer link is invalid or expired.")}
           </p>
         ) : (
           <div className="space-y-4">
             {answer.escalation_required && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm font-semibold text-red-700">
                 <i className="ri-alarm-warning-line mr-2" />
-                Escalation required
+                {t("Escalation required")}
               </div>
             )}
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-foreground/90">

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { useLocale } from "@/app/context/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -93,12 +94,6 @@ function textFromChange(change: Partial<Clause>) {
   return JSON.stringify(change, null, 2);
 }
 
-function formatLabel(value: string) {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -114,6 +109,7 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export default function LawyerDashboard() {
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
   const [clauses, setClauses] = useState<Clause[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedClause, setSelectedClause] = useState<Clause | null>(null);
@@ -259,7 +255,7 @@ export default function LawyerDashboard() {
     } catch (err) {
       setError(
         err instanceof Error && err.message.includes("modified")
-          ? "Clause was modified - please review again"
+          ? t("Clause was modified - please review again")
           : String(err)
       );
     }
@@ -279,7 +275,7 @@ export default function LawyerDashboard() {
       await apiJson<EmailQueueEntry>(`/email/queue/${encodeURIComponent(entryId)}/approve`, {
         method: "POST",
       });
-      setNotice("Email insights added to negotiation history. Evolve refreshed.");
+      setNotice(t("Email insights added to negotiation history. Evolve refreshed."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -295,7 +291,7 @@ export default function LawyerDashboard() {
       await apiJson<EmailQueueEntry>(`/email/queue/${encodeURIComponent(entryId)}/reject`, {
         method: "POST",
       });
-      setNotice("Email insights rejected.");
+      setNotice(t("Email insights rejected."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -327,18 +323,18 @@ export default function LawyerDashboard() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
-                Legal control
+                {t("Legal control")}
               </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight">Lawyer Dashboard</h2>
-              <p className="text-sm text-muted-foreground">Clauses, review, evolve, history</p>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight">{t("Lawyer Dashboard")}</h2>
+              <p className="text-sm text-muted-foreground">{t("Clauses, review, evolve, history")}</p>
             </div>
             <Button
               type="button"
               variant="outline"
               size="icon"
               onClick={refresh}
-              title="Refresh"
-              aria-label="Refresh"
+              title={t("Refresh")}
+              aria-label={t("Refresh")}
             >
               <i className="ri-refresh-line text-base" />
             </Button>
@@ -352,7 +348,7 @@ export default function LawyerDashboard() {
             <div>
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 <i className="ri-inbox-line text-base text-livebook" />
-                Email Insights
+                {t("Email Insights")}
               </h3>
               <p className="mt-1 font-mono text-xs text-muted-foreground">{FORWARDING_ADDRESS}</p>
             </div>
@@ -360,7 +356,7 @@ export default function LawyerDashboard() {
           </div>
           <div className="mt-3 flex max-h-80 flex-col gap-3 overflow-y-auto pr-1">
             {emailQueue.length === 0 ? (
-              <p className="text-xs text-muted-foreground">No pending email insights.</p>
+              <p className="text-xs text-muted-foreground">{t("No pending email insights.")}</p>
             ) : (
               emailQueue.map((entry) => (
                 <EmailInsightCard
@@ -392,15 +388,15 @@ export default function LawyerDashboard() {
                   <div className="min-w-0">
                     <p className="truncate font-semibold">{clause.name}</p>
                     <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">
-                      {clause.positions?.preferred ?? "No preferred position"}
+                      {clause.positions?.preferred ?? t("No preferred position")}
                     </p>
                   </div>
                   <StatusBadge tone={statusTone(status)} className="shrink-0">
-                    {formatLabel(status)}
+                    {formatEnumLabel(status)}
                   </StatusBadge>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Last counterparty: {lastHistory?.counterparty ?? "None"}
+                  {t("Last counterparty: ")}{lastHistory?.counterparty ?? t("None")}
                 </p>
               </button>
             );
@@ -413,8 +409,8 @@ export default function LawyerDashboard() {
           <div className="flex h-full items-center justify-center p-8">
             <PremiumEmpty
               icon={<i className="ri-shield-alert-line text-base" />}
-              title="Select a clause"
-              description="Review source text, structured positions, negotiation history, and version records."
+              title={t("Select a clause")}
+              description={t("Review source text, structured positions, negotiation history, and version records.")}
               className="max-w-xl"
             />
           </div>
@@ -423,11 +419,11 @@ export default function LawyerDashboard() {
             <PageHeader
               eyebrow={selectedClause.clause_id}
               title={selectedClause.name}
-              description={`Version ${selectedClause.meta?.version ?? 1} · ${formatLabel(selectedClause.meta?.review_status ?? "pending")}`}
+              description={`${t("Version")} ${selectedClause.meta?.version ?? 1} · ${formatEnumLabel(selectedClause.meta?.review_status ?? "pending")}`}
               actions={
                 <Button type="button" onClick={approveClause}>
                   <i className="ri-check-line text-base" data-icon="inline-start" />
-                  Approve
+                  {t("Approve")}
                 </Button>
               }
             />
@@ -438,7 +434,7 @@ export default function LawyerDashboard() {
               <div className="space-y-5">
                 <section className="rounded-lg border bg-card p-5 shadow-sm">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-semibold">Structured Data</h3>
+                    <h3 className="font-semibold">{t("Structured Data")}</h3>
                     <div className="flex gap-2">
                       <Button
                         type="button"
@@ -446,7 +442,7 @@ export default function LawyerDashboard() {
                         onClick={saveDraft}
                       >
                         <i className="ri-save-line text-base" data-icon="inline-start" />
-                        Save
+                        {t("Save")}
                       </Button>
                       <Button
                         type="button"
@@ -467,13 +463,13 @@ export default function LawyerDashboard() {
                           })
                         }
                       >
-                        Cancel
+                        {t("Cancel")}
                       </Button>
                     </div>
                   </div>
                   <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                     <label className="text-xs font-semibold text-muted-foreground">
-                      Name
+                      {t("Name")}
                       <Input
                         value={editDraft.name ?? ""}
                         onChange={(event) => updateDraftField("name", event.target.value)}
@@ -481,7 +477,7 @@ export default function LawyerDashboard() {
                       />
                     </label>
                     <label className="text-xs font-semibold text-muted-foreground">
-                      Keywords
+                      {t("Keywords")}
                       <Input
                         value={(editDraft.keywords ?? []).join(", ")}
                         onChange={(event) =>
@@ -495,7 +491,7 @@ export default function LawyerDashboard() {
                     </label>
                     {(["preferred", "fallback_1", "fallback_2"] as const).map((field) => (
                       <label key={field} className="text-xs font-semibold text-muted-foreground">
-                        {formatLabel(field)}
+                        {formatEnumLabel(field)}
                         <Textarea
                           value={editDraft.positions?.[field] ?? ""}
                           onChange={(event) => updatePositionField(field, event.target.value)}
@@ -504,7 +500,7 @@ export default function LawyerDashboard() {
                       </label>
                     ))}
                     <label className="text-xs font-semibold text-muted-foreground">
-                      Red line
+                      {t("Red line")}
                       <Textarea
                         value={editDraft.red_line ?? ""}
                         onChange={(event) => updateDraftField("red_line", event.target.value)}
@@ -512,7 +508,7 @@ export default function LawyerDashboard() {
                       />
                     </label>
                     <label className="text-xs font-semibold text-muted-foreground">
-                      Escalation trigger
+                      {t("Escalation trigger")}
                       <Textarea
                         value={editDraft.escalation_trigger ?? ""}
                         onChange={(event) => updateDraftField("escalation_trigger", event.target.value)}
@@ -524,7 +520,7 @@ export default function LawyerDashboard() {
                         checked={Boolean(editDraft.always_escalate)}
                         onCheckedChange={(checked) => updateDraftField("always_escalate", Boolean(checked))}
                       />
-                      Always escalate
+                      {t("Always escalate")}
                     </label>
                   </div>
                 </section>
@@ -535,7 +531,7 @@ export default function LawyerDashboard() {
                       <div>
                         <h3 className="flex items-center gap-2 font-semibold text-sky-950">
                           <i className="ri-sparkling-line text-base" />
-                          Evolve Suggestion
+                          {t("Evolve Suggestion")}
                         </h3>
                         <p className="mt-1 text-sm text-sky-900">
                           {selectedSuggestion.pattern_description}
@@ -546,8 +542,8 @@ export default function LawyerDashboard() {
                           className="mt-3 h-24 border-sky-200 bg-card/90"
                         />
                         <p className="mt-2 text-xs text-sky-800">
-                          Evidence: {selectedSuggestion.supporting_contracts.join(", ") || "none"} ·{" "}
-                          {selectedSuggestion.confidence}
+                          {t("Evidence: ")}{selectedSuggestion.supporting_contracts.join(", ") || t("none")} ·{" "}
+                          {formatEnumLabel(selectedSuggestion.confidence)}
                         </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
@@ -556,7 +552,7 @@ export default function LawyerDashboard() {
                           size="sm"
                           onClick={() => approveEvolve(selectedSuggestion)}
                         >
-                          Approve
+                          {t("Approve")}
                         </Button>
                         <Button
                           type="button"
@@ -564,7 +560,7 @@ export default function LawyerDashboard() {
                           size="sm"
                           onClick={() => rejectEvolve(selectedSuggestion.id)}
                         >
-                          Reject
+                          {t("Reject")}
                         </Button>
                       </div>
                     </div>
@@ -573,18 +569,18 @@ export default function LawyerDashboard() {
 
                 <section className="rounded-lg border bg-card p-5 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="font-semibold">Negotiation History</h3>
+                    <h3 className="font-semibold">{t("Negotiation History")}</h3>
                     <div className="flex gap-2">
                       <Select
                         value={jurisdictionFilter}
                         onValueChange={setJurisdictionFilter}
                       >
                         <SelectTrigger className="h-8 w-[180px] text-xs">
-                          <SelectValue placeholder="Jurisdiction" />
+                          <SelectValue placeholder={t("Jurisdiction")} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="all">All jurisdictions</SelectItem>
+                            <SelectItem value="all">{t("All jurisdictions")}</SelectItem>
                             {jurisdictions.map((value) => (
                               <SelectItem key={value} value={value}>
                                 {value}
@@ -598,15 +594,15 @@ export default function LawyerDashboard() {
                         onValueChange={setOutcomeFilter}
                       >
                         <SelectTrigger className="h-8 w-[180px] text-xs">
-                          <SelectValue placeholder="Outcome" />
+                          <SelectValue placeholder={t("Outcome")} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
-                            <SelectItem value="all">All outcomes</SelectItem>
-                            <SelectItem value="preferred">Preferred</SelectItem>
-                            <SelectItem value="fallback_1">Fallback 1</SelectItem>
-                            <SelectItem value="fallback_2">Fallback 2</SelectItem>
-                            <SelectItem value="red_line_breached">Red Line Breached</SelectItem>
+                            <SelectItem value="all">{t("All outcomes")}</SelectItem>
+                            <SelectItem value="preferred">{formatEnumLabel("preferred")}</SelectItem>
+                            <SelectItem value="fallback_1">{formatEnumLabel("fallback_1")}</SelectItem>
+                            <SelectItem value="fallback_2">{formatEnumLabel("fallback_2")}</SelectItem>
+                            <SelectItem value="red_line_breached">{formatEnumLabel("red_line_breached")}</SelectItem>
                           </SelectGroup>
                         </SelectContent>
                       </Select>
@@ -615,20 +611,20 @@ export default function LawyerDashboard() {
                   {filteredNegotiations.length === 0 ? (
                     <PremiumEmpty
                       icon={<i className="ri-time-line text-base" />}
-                      title="No negotiation history yet"
-                      description="Approved email or tabular insights will appear here."
+                      title={t("No negotiation history yet")}
+                      description={t("Approved email or tabular insights will appear here.")}
                       className="mt-4 min-h-44"
                     />
                   ) : (
                     <div className="mt-4 divide-y">
                       {filteredNegotiations.map((row, index) => (
                         <div key={`${row.contract_id}-${index}`} className="py-3 text-sm">
-                          <p className="font-semibold">{row.contract_id ?? "Contract"}</p>
+                          <p className="font-semibold">{row.contract_id ?? t("Contract")}</p>
                           <p className="text-muted-foreground">
-                            {row.counterparty ?? "Unknown"} ·{" "}
-                            {row.jurisdiction ?? "Not Available"} ·{" "}
-                            {formatLabel(row.outcome ?? "not available")} ·{" "}
-                            {row.escalated ? "Escalated" : "Not Escalated"}
+                            {row.counterparty ?? t("Unknown")} ·{" "}
+                            {row.jurisdiction ?? t("Not Available")} ·{" "}
+                            {formatEnumLabel(row.outcome ?? "not_available")} ·{" "}
+                            {row.escalated ? t("Escalated") : t("Not Escalated")}
                           </p>
                         </div>
                       ))}
@@ -639,25 +635,25 @@ export default function LawyerDashboard() {
 
               <aside className="space-y-5">
                 <section className="rounded-lg border bg-card p-5 shadow-sm">
-                  <h3 className="font-semibold">Raw Source</h3>
+                  <h3 className="font-semibold">{t("Raw Source")}</h3>
                   <LegalTextPanel className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap">
-                    {selectedClause.raw_source_segment || "No source text available"}
+                    {selectedClause.raw_source_segment || t("No source text available")}
                   </LegalTextPanel>
                 </section>
 
                 <section className="rounded-lg border bg-card p-5 shadow-sm">
-                  <h3 className="font-semibold">Version History</h3>
+                  <h3 className="font-semibold">{t("Version History")}</h3>
                   {(selectedClause.history ?? []).length === 0 ? (
-                    <p className="mt-3 text-sm text-muted-foreground">No versions yet</p>
+                    <p className="mt-3 text-sm text-muted-foreground">{t("No versions yet")}</p>
                   ) : (
                     <div className="mt-3 flex flex-col gap-3">
                       {(selectedClause.history ?? []).map((entry) => (
                         <div key={`${entry.version}-${entry.timestamp}`} className="rounded-lg border bg-muted/35 p-3">
                           <p className="text-sm font-semibold">
-                            v{entry.version} · {entry.action}
+                            v{entry.version} · {formatEnumLabel(entry.action)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {entry.approved_by} · {new Date(entry.timestamp).toLocaleString()}
+                            {entry.approved_by} · {formatDateTime(entry.timestamp)}
                           </p>
                           <Button
                             type="button"
@@ -666,7 +662,7 @@ export default function LawyerDashboard() {
                             onClick={() => restoreVersion(entry.version)}
                             className="mt-2"
                           >
-                            Restore
+                            {formatEnumLabel("restore")}
                           </Button>
                         </div>
                       ))}
@@ -694,8 +690,10 @@ function EmailInsightCard({
   onApprove: () => void;
   onReject: () => void;
 }) {
+  const { t, formatEnumLabel } = useLocale();
   const clauses = entry.extracted?.clauses ?? [];
-  const counterparty = entry.extracted?.counterparty || "Unknown counterparty";
+  const counterparty =
+    entry.extracted?.counterparty || `${t("Unknown")} ${t("Counterparty").toLowerCase()}`;
 
   return (
     <article className="rounded-lg border bg-card p-3 text-xs shadow-sm">
@@ -705,26 +703,26 @@ function EmailInsightCard({
           <p className="mt-1 truncate text-muted-foreground">{entry.subject || entry.id}</p>
         </div>
         {entry.low_confidence ? (
-          <StatusBadge tone="warning" className="shrink-0">Low</StatusBadge>
+          <StatusBadge tone="warning" className="shrink-0">{t("Low")}</StatusBadge>
         ) : null}
       </div>
 
       <div className="mt-3 flex flex-col gap-2">
         {clauses.length === 0 ? (
-          <p className="rounded-md bg-muted p-2 text-muted-foreground">No clause match found.</p>
+          <p className="rounded-md bg-muted p-2 text-muted-foreground">{t("No clause match found.")}</p>
         ) : (
           clauses.map((clause, index) => (
             <div key={`${entry.id}-${clause.clause_id}-${index}`} className="rounded-md border bg-muted/45 p-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono font-semibold text-foreground">{clause.clause_id}</span>
                 <StatusBadge tone={statusTone(clause.confidence ?? "low")}>
-                  {formatLabel(clause.confidence ?? "low")}
+                  {formatEnumLabel(clause.confidence ?? "low")}
                 </StatusBadge>
                 <StatusBadge tone={statusTone(clause.outcome)}>
-                  {formatLabel(clause.outcome)}
+                  {formatEnumLabel(clause.outcome)}
                 </StatusBadge>
                 {clause.escalated ? (
-                  <StatusBadge tone="danger">Escalated</StatusBadge>
+                  <StatusBadge tone="danger">{t("Escalated")}</StatusBadge>
                 ) : null}
               </div>
               {clause.evidence ? (
@@ -747,7 +745,7 @@ function EmailInsightCard({
           className="flex-1"
         >
           <i className="ri-mail-check-line text-base" data-icon="inline-start" />
-          {busy ? "Working" : "Approve"}
+          {busy ? t("Working") : t("Approve")}
         </Button>
         <Button
           type="button"
@@ -757,7 +755,7 @@ function EmailInsightCard({
           disabled={busy}
           className="flex-1"
         >
-          Reject
+          {t("Reject")}
         </Button>
       </div>
     </article>

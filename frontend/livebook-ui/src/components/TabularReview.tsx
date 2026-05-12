@@ -2,6 +2,7 @@
 
 import { type MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { useLocale } from "@/app/context/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -96,12 +97,6 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-function formatLabel(value: string) {
-  return value
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function isSupportedFile(file: File) {
   const lowerName = file.name.toLowerCase();
   return (
@@ -132,6 +127,7 @@ const COLUMN_MIN_WIDTHS: Record<ColumnKey, number> = {
 };
 
 export default function TabularReview({ userRole }: TabularReviewProps) {
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
   const inputRef = useRef<HTMLInputElement>(null);
   const resizeRef = useRef<{ key: ColumnKey; startX: number; startWidth: number } | null>(null);
   const [sessions, setSessions] = useState<TabularReviewSession[]>([]);
@@ -229,8 +225,8 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
         type="button"
         onMouseDown={(event) => startColumnResize(event, key)}
         className="group absolute right-0 top-0 flex h-full w-5 cursor-col-resize touch-none items-center justify-center gap-0.5 rounded-sm outline-none hover:bg-livebook-pale/60 focus:bg-livebook-pale/60"
-        title={`Resize ${label}`}
-        aria-label={`Resize ${label}`}
+        title={`${t("Resize")} ${label}`}
+        aria-label={`${t("Resize")} ${label}`}
       >
         <span className="h-4 w-px rounded bg-border transition-colors group-hover:bg-livebook group-focus:bg-livebook" />
         <span className="h-4 w-px rounded bg-border transition-colors group-hover:bg-livebook group-focus:bg-livebook" />
@@ -296,7 +292,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
     if (files.length === 0) return null;
     const unsupported = files.find((file) => !isSupportedFile(file));
     if (unsupported) {
-      setError(`${unsupported.name} is not supported. Use PDF or DOCX.`);
+      setError(`${unsupported.name}: ${t("Unsupported file. Use PDF or DOCX.")}`);
       setUploadState("error");
       return null;
     }
@@ -308,7 +304,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
 
   async function uploadFiles(files: File[]) {
     if (files.length === 0) {
-      setError("Choose at least one negotiated contract.");
+      setError(t("Choose at least one negotiated contract."));
       setUploadState("error");
       return;
     }
@@ -335,8 +331,8 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
       setUploadState("success");
       setNotice(
         userRole === "business" && session.escalation_id
-          ? "Deviation found. Escalated to Legal Counsel."
-          : "Review session created."
+          ? t("Deviation found. Escalated to Legal Counsel.")
+          : t("Review session created.")
       );
       await refresh();
     } catch (err) {
@@ -358,7 +354,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
         }
       );
       setActiveSession(updated);
-      setNotice("Insights added to negotiation history. Evolve suggestions are ready for review.");
+      setNotice(t("Insights added to negotiation history. Evolve suggestions are ready for review."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -372,11 +368,11 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
-                Batch contracts
+                {t("Batch contracts")}
               </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">Tabular Review</h2>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{t("Tabular Review")}</h2>
               <p className="text-sm text-muted-foreground">
-                Compare negotiated contracts against the current playbook.
+                {t("Compare negotiated contracts against the current playbook.")}
               </p>
             </div>
 
@@ -392,11 +388,11 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 }}
                 className="h-10 w-full min-w-0 rounded-lg border bg-background px-3 text-sm text-foreground outline-none focus:border-ring focus:ring-3 focus:ring-ring/30 sm:w-[min(360px,calc(100vw-5rem))]"
               >
-                <option value="">No review session</option>
+                <option value="">{t("No review session")}</option>
                 {sessions.map((session) => (
                   <option key={session.session_id} value={session.session_id}>
-                    {new Date(session.created_at).toLocaleString()} - {session.metrics.contract_count}{" "}
-                    contracts
+                    {formatDateTime(session.created_at)} - {session.metrics.contract_count}{" "}
+                    {t("contracts")}
                   </option>
                 ))}
               </select>
@@ -417,8 +413,8 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 size="icon-lg"
                 onClick={() => inputRef.current?.click()}
                 disabled={uploadState === "uploading"}
-                title="Upload files"
-                aria-label="Upload files"
+                title={t("Upload files")}
+                aria-label={t("Upload files")}
               >
                 {uploadState === "uploading" ? (
                   <i className="ri-loader-4-line animate-spin text-base" />
@@ -430,14 +426,14 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Metric label="Contracts" value={activeSession?.metrics.contract_count ?? 0} />
-            <Metric label="Rows" value={activeSession?.metrics.matched_clause_count ?? 0} />
+            <Metric label={t("Contracts")} value={activeSession?.metrics.contract_count ?? 0} />
+            <Metric label={t("Rows")} value={activeSession?.metrics.matched_clause_count ?? 0} />
             <Metric
-              label="Avg Dev"
+              label={t("Avg Dev")}
               value={activeSession?.metrics.average_deviation.toFixed(2) ?? "0.00"}
             />
-            <Metric label="Fallbacks" value={activeSession?.metrics.fallback_rows ?? 0} />
-            <Metric label="Red Lines" value={activeSession?.metrics.red_line_breaches ?? 0} />
+            <Metric label={t("Fallbacks")} value={activeSession?.metrics.fallback_rows ?? 0} />
+            <Metric label={t("Red Lines")} value={activeSession?.metrics.red_line_breaches ?? 0} />
           </div>
         </div>
 
@@ -463,7 +459,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 <Input
                   value={searchTerm}
                   onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="Search contract, counterparty, clause, evidence..."
+                  placeholder={t("Search contract, counterparty, clause, evidence...")}
                   className="pl-10"
                 />
               </div>
@@ -472,15 +468,15 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 onValueChange={setOutcomeFilter}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Outcome" />
+                  <SelectValue placeholder={t("Outcome")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">All outcomes</SelectItem>
-                    <SelectItem value="preferred">Preferred</SelectItem>
-                    <SelectItem value="fallback_1">Fallback 1</SelectItem>
-                    <SelectItem value="fallback_2">Fallback 2</SelectItem>
-                    <SelectItem value="red_line_breached">Red Line</SelectItem>
+                    <SelectItem value="all">{t("All outcomes")}</SelectItem>
+                    <SelectItem value="preferred">{formatEnumLabel("preferred")}</SelectItem>
+                    <SelectItem value="fallback_1">{formatEnumLabel("fallback_1")}</SelectItem>
+                    <SelectItem value="fallback_2">{formatEnumLabel("fallback_2")}</SelectItem>
+                    <SelectItem value="red_line_breached">{t("Red Line")}</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -489,14 +485,14 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 onValueChange={setConfidenceFilter}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Confidence" />
+                  <SelectValue placeholder={t("Confidence")} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">All confidence</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="all">{t("All confidence")}</SelectItem>
+                    <SelectItem value="high">{formatEnumLabel("high")}</SelectItem>
+                    <SelectItem value="medium">{formatEnumLabel("medium")}</SelectItem>
+                    <SelectItem value="low">{formatEnumLabel("low")}</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -509,7 +505,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 className="max-w-full shrink-0"
               >
                 <i className="ri-sparkling-line text-base" data-icon="inline-start" />
-                {activeSession?.applied_at ? "Insights Applied" : "Generate Suggestions"}
+                {activeSession?.applied_at ? t("Insights Applied") : t("Generate Suggestions")}
               </Button>
             ) : null}
           </div>
@@ -519,8 +515,8 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
               <div className="flex h-full items-center justify-center p-8">
                 <PremiumEmpty
                   icon={<i className="ri-file-search-line text-base" />}
-                  title="No tabular review rows yet"
-                  description="Upload negotiated contracts to compare them against the current playbook."
+                  title={t("No tabular review rows yet")}
+                  description={t("Upload negotiated contracts to compare them against the current playbook.")}
                 />
               </div>
             ) : (
@@ -538,12 +534,12 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-muted text-xs uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    {headerCell("contract", "Contract")}
-                    {headerCell("counterparty", "Counterparty")}
-                    {headerCell("clause", "Clause")}
-                    {headerCell("outcome", "Outcome")}
-                    {headerCell("confidence", "Confidence")}
-                    {headerCell("applied", "Applied")}
+                    {headerCell("contract", t("Contract"))}
+                    {headerCell("counterparty", t("Counterparty"))}
+                    {headerCell("clause", t("Clause"))}
+                    {headerCell("outcome", t("Outcome"))}
+                    {headerCell("confidence", t("Confidence"))}
+                    {headerCell("applied", t("Applied"))}
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -573,16 +569,16 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={statusTone(row.outcome)}>
-                          {formatLabel(row.outcome)}
+                          {formatEnumLabel(row.outcome)}
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge tone={statusTone(row.confidence)}>
-                          {formatLabel(row.confidence)}
+                          {formatEnumLabel(row.confidence)}
                         </StatusBadge>
                       </td>
                       <td className="px-4 py-3 text-muted-foreground">
-                        {row.applied ? "Yes" : "No"}
+                        {row.applied ? t("Yes") : t("No")}
                       </td>
                     </tr>
                   ))}
@@ -603,6 +599,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                   </h3>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {selectedRow.counterparty} - {selectedRow.file_name}
+                    
                   </p>
                 </div>
                 <Button
@@ -610,23 +607,23 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                   variant="outline"
                   size="icon"
                   onClick={() => setDetailOpen(false)}
-                  title="Close details"
-                  aria-label="Close details"
+                  title={t("Close details")}
+                  aria-label={t("Close details")}
                 >
                   <i className="ri-close-line text-base" />
                 </Button>
               </div>
 
-              <DetailBlock title="Contract Evidence" body={selectedRow.evidence || "No evidence"} />
-              <DetailBlock title="Rationale" body={selectedRow.rationale || "No rationale"} />
+              <DetailBlock title={t("Contract Evidence")} body={selectedRow.evidence || t("No evidence")} />
+              <DetailBlock title={t("Rationale")} body={selectedRow.rationale || t("No rationale")} />
 
               <div className="rounded-lg border bg-card p-4 shadow-sm">
-                <h4 className="mb-3 text-sm font-semibold text-foreground">Playbook Context</h4>
-                <Field label="Preferred" value={selectedClause?.positions?.preferred} />
-                <Field label="Fallback 1" value={selectedClause?.positions?.fallback_1} />
-                <Field label="Fallback 2" value={selectedClause?.positions?.fallback_2} />
-                <Field label="Red Line" value={selectedClause?.red_line} />
-                <Field label="Escalation" value={selectedClause?.escalation_trigger} />
+                <h4 className="mb-3 text-sm font-semibold text-foreground">{t("Playbook Context")}</h4>
+                <Field label={t("Preferred")} value={selectedClause?.positions?.preferred} emptyLabel={t("Not set")} />
+                <Field label={formatEnumLabel("fallback_1")} value={selectedClause?.positions?.fallback_1} emptyLabel={t("Not set")} />
+                <Field label={formatEnumLabel("fallback_2")} value={selectedClause?.positions?.fallback_2} emptyLabel={t("Not set")} />
+                <Field label={t("Red Line")} value={selectedClause?.red_line} emptyLabel={t("Not set")} />
+                <Field label={t("Escalation")} value={selectedClause?.escalation_trigger} emptyLabel={t("Not set")} />
               </div>
             </div>
           </aside>
@@ -654,11 +651,11 @@ function DetailBlock({ title, body }: { title: string; body: string }) {
   );
 }
 
-function Field({ label, value }: { label: string; value?: string }) {
+function Field({ label, value, emptyLabel }: { label: string; value?: string; emptyLabel: string }) {
   return (
     <div className="border-t py-3 first:border-t-0 first:pt-0">
       <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</dt>
-      <dd className="mt-1 text-sm leading-relaxed text-foreground/80">{value || "Not set"}</dd>
+      <dd className="mt-1 text-sm leading-relaxed text-foreground/80">{value || emptyLabel}</dd>
     </div>
   );
 }

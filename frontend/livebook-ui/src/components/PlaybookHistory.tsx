@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLocale } from "@/app/context/LocaleContext";
+import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Notice, PageHeader, Panel, PremiumEmpty, StatusBadge } from "@/components/premium";
 import { diffWords, type VersionDiffRow } from "@/lib/versionDiff";
 
 const API_BASE = "/api/backend";
@@ -77,44 +81,32 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
-function formatTimestamp(timestamp?: string) {
-  if (!timestamp) return "Unknown date";
-  const date = new Date(timestamp);
-  if (Number.isNaN(date.getTime())) return timestamp;
-  return date.toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
-function formatAction(action: string) {
-  return action
-    .replace(/_/g, " ")
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
-function formatFieldValue(value: unknown) {
-  if (value === undefined || value === null || value === "") return "Not set";
-  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : "Not set";
-  if (typeof value === "boolean") return value ? "Yes" : "No";
+function formatFieldValue(
+  value: unknown,
+  t: (key: string) => string
+) {
+  if (value === undefined || value === null || value === "") return t("Not set");
+  if (Array.isArray(value)) return value.length > 0 ? value.join(", ") : t("Not set");
+  if (typeof value === "boolean") return value ? t("Yes") : t("No");
   return String(value);
 }
 
 function DiffRow({ row }: { row: VersionDiffRow }) {
+  const { t } = useLocale();
   const diff = diffWords(row.from, row.to);
   return (
     <section className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center justify-between border-b border-border bg-muted/40 px-4 py-3">
         <h5 className="text-sm font-semibold text-foreground">{row.field}</h5>
         <span className="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
-          Changed
+          {t("Changed")}
         </span>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2">
         <div className="border-b border-border p-4 md:border-b-0 md:border-r">
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
-            Previous
+            {t("Previous")}
           </p>
           <p className="text-sm leading-7 text-foreground/90">
             {diff.removed.map((part, index) => (
@@ -134,7 +126,7 @@ function DiffRow({ row }: { row: VersionDiffRow }) {
         <div className="p-4">
           <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-            Selected
+            {t("Selected")}
           </p>
           <p className="text-sm leading-7 text-foreground/90">
             {diff.added.map((part, index) => (
@@ -165,11 +157,14 @@ function VersionCard({
   active: boolean;
   onOpen: (version: PlaybookVersion) => void;
 }) {
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
+  const timestamp = version.timestamp ? formatDateTime(version.timestamp) : t("Unknown date");
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={() => onOpen(version)}
-      className={`w-full rounded-lg bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-livebook/30 ${
+      className={`h-auto w-full flex-col items-stretch justify-start rounded-lg bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-livebook/30 ${
         active
           ? "border-2 border-livebook border-l-4 border-l-livebook ring-2 ring-livebook/20"
           : "border border-border border-l-4 border-l-slate-300"
@@ -180,19 +175,20 @@ function VersionCard({
           {version.label}
         </span>
         <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-          {version.diff_summary?.changed_clause_count ?? version.changed_clause_ids?.length ?? 0} changes
+          {version.diff_summary?.changed_clause_count ?? version.changed_clause_ids?.length ?? 0} {t("changes")}
         </span>
       </div>
       <p className="text-sm font-semibold text-foreground">
-        {formatAction(version.action)}
+        {formatEnumLabel(version.action)}
       </p>
-      <p className="mt-1 text-xs text-muted-foreground">{formatTimestamp(version.timestamp)}</p>
+      <p className="mt-1 text-xs text-muted-foreground">{timestamp}</p>
       <p className="mt-3 font-mono text-[11px] text-muted-foreground">{version.version_id}</p>
-    </button>
+    </Button>
   );
 }
 
 function ClauseSnapshotCard({ clause }: { clause: Clause }) {
+  const { t, formatEnumLabel } = useLocale();
   return (
     <article className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -201,37 +197,37 @@ function ClauseSnapshotCard({ clause }: { clause: Clause }) {
             {clause.original_clause_id ?? clause.clause_id}
           </p>
           <h5 className="mt-1 text-sm font-semibold text-foreground">
-            {clause.name ?? "Unnamed clause"}
+            {clause.name ?? t("Unnamed clause")}
           </h5>
         </div>
         <span className="rounded-full bg-muted px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-          {clause.meta?.review_status ?? "unknown"}
+          {formatEnumLabel(clause.meta?.review_status ?? "unknown")}
         </span>
       </div>
       <div className="grid gap-3 md:grid-cols-2">
         <p className="text-xs leading-5 text-muted-foreground">
-          <span className="font-semibold text-foreground/90">Preferred:</span>{" "}
-          {formatFieldValue(clause.positions?.preferred)}
+          <span className="font-semibold text-foreground/90">{t("Preferred")}:</span>{" "}
+          {formatFieldValue(clause.positions?.preferred, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
-          <span className="font-semibold text-foreground/90">Fallback 1:</span>{" "}
-          {formatFieldValue(clause.positions?.fallback_1)}
+          <span className="font-semibold text-foreground/90">{formatEnumLabel("fallback_1")}:</span>{" "}
+          {formatFieldValue(clause.positions?.fallback_1, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
-          <span className="font-semibold text-foreground/90">Fallback 2:</span>{" "}
-          {formatFieldValue(clause.positions?.fallback_2)}
+          <span className="font-semibold text-foreground/90">{formatEnumLabel("fallback_2")}:</span>{" "}
+          {formatFieldValue(clause.positions?.fallback_2, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground">
-          <span className="font-semibold text-foreground/90">Always escalate:</span>{" "}
-          {formatFieldValue(clause.always_escalate)}
+          <span className="font-semibold text-foreground/90">{t("Always escalate")}:</span>{" "}
+          {formatFieldValue(clause.always_escalate, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
-          <span className="font-semibold text-foreground/90">Red line:</span>{" "}
-          {formatFieldValue(clause.red_line)}
+          <span className="font-semibold text-foreground/90">{t("Red line")}:</span>{" "}
+          {formatFieldValue(clause.red_line, t)}
         </p>
         <p className="text-xs leading-5 text-muted-foreground md:col-span-2">
-          <span className="font-semibold text-foreground/90">Escalation:</span>{" "}
-          {formatFieldValue(clause.escalation_trigger)}
+          <span className="font-semibold text-foreground/90">{t("Escalation")}:</span>{" "}
+          {formatFieldValue(clause.escalation_trigger, t)}
         </p>
       </div>
     </article>
@@ -244,6 +240,7 @@ export default function PlaybookHistory({
 }: PlaybookHistoryProps) {
   void canRestore;
   void audience;
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [selectedPlaybookId, setSelectedPlaybookId] = useState("");
   const [versions, setVersions] = useState<PlaybookVersion[]>([]);
@@ -323,65 +320,75 @@ export default function PlaybookHistory({
 
   return (
     <div className="flex h-screen flex-col bg-background">
-      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-border bg-card px-6 py-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-foreground">Version History</h2>
-          <p className="text-sm text-muted-foreground">
-            Track playbook evolution by selected playbook
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <select
-            value={selectedPlaybookId}
-            onChange={(event) => {
-              setSelectedPlaybookId(event.target.value);
-              setOverview(null);
-            }}
-            className="min-w-72 rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground/80 outline-none focus:border-livebook"
-          >
-            {playbooks.map((playbook) => (
-              <option key={playbook.id} value={playbook.id}>
-                {playbook.name} ({playbook.clause_count})
-              </option>
-            ))}
-          </select>
-          <div className="flex items-center gap-2 rounded-full border border-livebook/20 bg-livebook-pale px-3 py-1.5 text-sm font-medium text-livebook-dark">
-            <i className="ri-git-branch-line"></i>
-            {versions.length} Versions
-          </div>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={t("Legal control")}
+        title={t("Version History")}
+        description={t("Track playbook evolution by selected playbook")}
+        actions={
+          <>
+            <div className="min-w-[14rem] max-w-full">
+              <Select
+                value={selectedPlaybookId}
+                onValueChange={(value) => {
+                  setSelectedPlaybookId(value);
+                  setOverview(null);
+                }}
+              >
+                <SelectTrigger className="h-9 w-full bg-background">
+                  <SelectValue placeholder={t("Select playbook")} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {playbooks.map((playbook) => (
+                      <SelectItem key={playbook.id} value={playbook.id}>
+                        {playbook.name} ({playbook.clause_count})
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+            <StatusBadge tone="accent">
+              {versions.length} {t("Versions")}
+            </StatusBadge>
+          </>
+        }
+      />
 
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden p-6">
-        {error && (
-          <div className="mb-4 flex shrink-0 items-center justify-between gap-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <span>{error}</span>
-            <button
-              type="button"
-              onClick={() => void loadVersions(selectedPlaybookId)}
-              className="rounded-lg border border-red-200 bg-card px-3 py-1.5 text-xs font-semibold text-red-700"
-            >
-              Retry
-            </button>
-          </div>
-        )}
+        {error ? (
+          <Notice tone="danger" className="mb-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{error}</span>
+              <Button type="button" variant="outline" size="sm" onClick={() => void loadVersions(selectedPlaybookId)}>
+                {t("Retry")}
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
 
         {selectedPlaybook && (
-          <div className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          <Panel className="mb-4" contentClassName="px-4 py-3">
             <span className="font-semibold text-foreground">{selectedPlaybook.name}</span>{" "}
-            · {selectedPlaybook.law_type ?? "General Commercial"} ·{" "}
-            {selectedPlaybook.party_name ?? "Opposite party"}
-          </div>
+            · {selectedPlaybook.law_type ?? t("General Commercial")} ·{" "}
+            {selectedPlaybook.party_name ?? t("Opposite party")}
+          </Panel>
         )}
 
         {isLoading && versions.length === 0 ? (
-          <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
-            Loading version history...
-          </div>
+          <PremiumEmpty
+            icon={<i className="ri-loader-4-line animate-spin text-base" />}
+            title={t("Loading version history...")}
+            description={t("Track playbook evolution by selected playbook")}
+            className="flex-1"
+          />
         ) : versions.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-            No versions yet
-          </div>
+          <PremiumEmpty
+            icon={<i className="ri-git-branch-line text-base" />}
+            title={t("No versions yet")}
+            description={t("Track playbook evolution by selected playbook")}
+            className="flex-1"
+          />
         ) : (
           <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-muted/70">
             <div className="w-max min-w-full px-6 py-8">
@@ -422,42 +429,46 @@ export default function PlaybookHistory({
             <div className="flex shrink-0 items-start justify-between gap-4 border-b border-border px-6 py-4">
               <div className="min-w-0">
                 <p className="text-xs font-semibold uppercase tracking-wide text-livebook-dark">
-                  Playbook version
+                  {t("Playbook version")}
                 </p>
                 <h3 className="mt-1 text-lg font-semibold text-foreground">
                   {overview.label} · {selectedPlaybook?.name ?? overview.playbook_id}
                 </h3>
                 <p className="mt-1 font-mono text-xs text-muted-foreground">
-                  {overview.version_id} · {formatAction(overview.action)} ·{" "}
-                  {formatTimestamp(overview.timestamp)}
+                  {overview.version_id} · {formatEnumLabel(overview.action)} ·{" "}
+                  {formatDateTime(overview.timestamp ?? "")}
                 </p>
               </div>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="icon"
                 onClick={() => setOverview(null)}
-                className="rounded-lg p-2 text-muted-foreground/70 transition-colors hover:bg-muted hover:text-foreground/80"
-                aria-label="Close overview"
+                aria-label={t("Close overview")}
               >
-                <i className="ri-close-line text-lg"></i>
-              </button>
+                <i className="ri-close-line text-base"></i>
+              </Button>
             </div>
 
             <div className="min-h-0 overflow-auto px-6 py-5">
               {isLoadingDetail ? (
-                <div className="p-6 text-sm text-muted-foreground">Loading version...</div>
+                <div className="p-6 text-sm text-muted-foreground">{t("Loading version...")}</div>
               ) : (
                 <>
                   <section className="mb-6">
                     <div className="mb-3 flex items-center gap-2">
                       <i className="ri-git-compare-line text-livebook"></i>
                       <h4 className="text-sm font-semibold text-foreground">
-                        Changed clauses
+                        {t("Changed clauses")}
                       </h4>
                     </div>
                     {!overview.diff || overview.diff.length === 0 ? (
-                      <div className="rounded-lg border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-                        No tracked clause changes for this version.
-                      </div>
+                      <PremiumEmpty
+                        icon={<i className="ri-git-compare-line text-base" />}
+                        title={t("No tracked clause changes for this version.")}
+                        description={t("Full playbook snapshot")}
+                        className="min-h-48"
+                      />
                     ) : (
                       <div className="space-y-4">
                         {overview.diff.map((clause) => (
@@ -474,13 +485,11 @@ export default function PlaybookHistory({
                                   {clause.name}
                                 </h5>
                               </div>
-                              <span className="rounded bg-card px-2 py-1 text-xs font-semibold text-muted-foreground">
-                                {clause.status}
-                              </span>
+                              <StatusBadge tone="neutral">{formatEnumLabel(clause.status)}</StatusBadge>
                             </div>
                             {clause.changed_fields.length === 0 ? (
                               <p className="text-sm text-muted-foreground">
-                                Clause {clause.status}.
+                                {t("Clause")} {formatEnumLabel(clause.status)}.
                               </p>
                             ) : (
                               <div className="space-y-3">
@@ -499,7 +508,7 @@ export default function PlaybookHistory({
                     <div className="mb-3 flex items-center gap-2">
                       <i className="ri-book-open-line text-livebook"></i>
                       <h4 className="text-sm font-semibold text-foreground">
-                        Full playbook snapshot
+                        {t("Full playbook snapshot")}
                       </h4>
                     </div>
                     <div className="space-y-3">

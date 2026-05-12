@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale } from "@/app/context/LocaleContext";
 import FormattedText from "./FormattedText";
+import { Button } from "@/components/ui/button";
+import { FilterBar, IconFrame, Notice, PageHeader, PremiumEmpty, StatusBadge } from "@/components/premium";
+import { SearchField } from "@/components/premium";
+import { cn } from "@/lib/utils";
 
 type QueryStatus = "resolved" | "escalated" | "approved" | "rejected";
 
@@ -17,6 +22,7 @@ interface ChatQueryItem {
 }
 
 export default function PastQueries() {
+  const { t, formatDateTime } = useLocale();
   const [queries, setQueries] = useState<ChatQueryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,38 +78,38 @@ export default function PastQueries() {
   const statusConfig = {
     resolved: {
       icon: "ri-check-line",
-      iconColor: "text-green-600",
-      bg: "bg-green-50",
-      badge: "text-green-700 bg-green-50 border-green-200",
-      label: "Resolved",
+      tone: "success" as const,
+      label: t("Resolved"),
     },
     escalated: {
       icon: "ri-arrow-up-line",
-      iconColor: "text-amber-600",
-      bg: "bg-amber-50",
-      badge: "text-amber-700 bg-amber-50 border-amber-200",
-      label: "Escalated",
+      tone: "warning" as const,
+      label: t("Escalated"),
     },
     approved: {
       icon: "ri-check-double-line",
-      iconColor: "text-green-600",
-      bg: "bg-green-50",
-      badge: "text-green-700 bg-green-50 border-green-200",
-      label: "Approved",
+      tone: "success" as const,
+      label: t("Approved"),
     },
     rejected: {
       icon: "ri-close-line",
-      iconColor: "text-red-600",
-      bg: "bg-red-50",
-      badge: "text-red-700 bg-red-50 border-red-200",
-      label: "Rejected",
+      tone: "danger" as const,
+      label: t("Rejected"),
     },
+  };
+
+  const filterLabels: Record<typeof filter, string> = {
+    all: t("All"),
+    resolved: t("Resolved"),
+    escalated: t("Escalated"),
+    approved: t("Approved"),
+    rejected: t("Rejected"),
   };
 
   const formatDate = (value: string) => {
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return value;
-    return date.toLocaleString([], {
+    return formatDateTime(date, {
       month: "short",
       day: "numeric",
       hour: "2-digit",
@@ -112,79 +118,77 @@ export default function PastQueries() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border px-6 py-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h2 className="text-lg font-semibold text-foreground">Past Queries</h2>
-          <p className="text-sm text-muted-foreground">
-            Browse previous questions and AI responses across users
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-            {resolvedCount} Resolved
-          </span>
-          <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200">
-            {escalatedCount} Escalated
-          </span>
-          <span className="text-xs font-medium text-green-700 bg-green-50 px-2.5 py-1 rounded-full border border-green-200">
-            {approvedCount} Approved
-          </span>
-          <span className="text-xs font-medium text-red-700 bg-red-50 px-2.5 py-1 rounded-full border border-red-200">
-            {rejectedCount} Rejected
-          </span>
-        </div>
-      </header>
+    <div className="flex h-screen flex-col bg-background">
+      <PageHeader
+        eyebrow={t("Business guidance")}
+        title={t("Past Queries")}
+        description={t("Browse previous questions and AI responses across users")}
+        meta={
+          <>
+            <StatusBadge tone="success">
+              {resolvedCount} {t("Resolved")}
+            </StatusBadge>
+            <StatusBadge tone="warning">
+              {escalatedCount} {t("Escalated")}
+            </StatusBadge>
+            <StatusBadge tone="success">
+              {approvedCount} {t("Approved")}
+            </StatusBadge>
+            <StatusBadge tone="danger">
+              {rejectedCount} {t("Rejected")}
+            </StatusBadge>
+          </>
+        }
+      />
 
-      {/* Filters */}
-      <div className="bg-card border-b border-border px-6 py-3 flex items-center gap-4 flex-shrink-0">
-        <div className="relative flex-1 max-w-md">
-          <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/70"></i>
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search questions or AI responses..."
-            className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-livebook/20 focus:border-livebook transition-all"
-          />
-        </div>
-        <div className="flex items-center gap-2">
+      <FilterBar>
+        <SearchField
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder={t("Search questions or AI responses...")}
+          className="w-full sm:max-w-md"
+        />
+        <div className="flex max-w-full items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
           {(["all", "resolved", "escalated", "approved", "rejected"] as const).map((f) => (
-            <button
+            <Button
               key={f}
+              type="button"
+              variant={filter === f ? "default" : "secondary"}
+              size="sm"
               onClick={() => setFilter(f)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                filter === f
-                  ? "bg-livebook text-white"
-                  : "bg-muted text-muted-foreground hover:bg-muted/70"
-              }`}
             >
-              {f === "all" ? "All" : f === "resolved" ? "Resolved" : f === "escalated" ? "Escalated" : f === "approved" ? "Approved" : "Rejected"}
-            </button>
+              {filterLabels[f]}
+            </Button>
           ))}
         </div>
-      </div>
+      </FilterBar>
 
-      {/* List */}
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-4xl mx-auto space-y-3">
+        <div className="mx-auto flex max-w-5xl flex-col gap-3">
+          {error && (
+            <Notice tone="danger" title={t("Could not load queries")}>
+              {error}
+            </Notice>
+          )}
           {filteredQueries.length === 0 && (
-            <div className="flex flex-col items-center justify-center h-64 text-center">
-              <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center mb-3">
-                <i className="ri-search-line text-xl text-muted-foreground/70"></i>
-              </div>
-              <h3 className="text-base font-semibold text-foreground mb-1">
-                {loading ? "Loading queries" : error ? "Could not load queries" : queries.length === 0 ? "No queries yet" : "No queries found"}
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                {error
-                  ? error
-                  : queries.length === 0
-                  ? "Ask a question in the Livebook Chat to see it here."
-                  : "Try adjusting your search or filter criteria."}
-              </p>
-            </div>
+            <PremiumEmpty
+              icon={<i className="ri-search-line text-base" />}
+              title={
+                loading
+                  ? t("Loading queries")
+                  : error
+                    ? t("Could not load queries")
+                    : queries.length === 0
+                      ? t("No queries yet")
+                      : t("No queries found")
+              }
+              description={
+                queries.length === 0
+                    ? t("Ask a question in the Livebook Chat to see it here.")
+                    : t("Try adjusting your search or filter criteria.")
+              }
+              className="min-h-[calc(100vh-19rem)]"
+            />
           )}
 
           {filteredQueries.map((query) => {
@@ -192,68 +196,60 @@ export default function PastQueries() {
             return (
               <div
                 key={query.id}
-                className="bg-card rounded-xl border border-border shadow-sm overflow-hidden"
+                className="overflow-hidden rounded-lg border border-border/80 bg-card shadow-sm"
               >
-                <button
+                <Button
+                  type="button"
+                  variant="ghost"
                   onClick={() =>
                     setExpandedId(expandedId === query.id ? null : query.id)
                   }
-                  className="w-full px-5 py-4 flex items-start gap-4 text-left hover:bg-muted/40 transition-colors"
+                  className="h-auto w-full justify-start rounded-none px-5 py-4 text-left hover:bg-muted/40"
                 >
-                  <div className="flex-shrink-0 mt-0.5">
-                    <div
-                      className={`w-8 h-8 rounded-full flex items-center justify-center ${config.bg}`}
-                    >
-                      <i
-                        className={`${config.icon} ${config.iconColor} text-sm`}
-                      ></i>
-                    </div>
-                  </div>
+                  <IconFrame tone={config.tone} className="mt-0.5">
+                    <i className={config.icon} />
+                  </IconFrame>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-mono font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         {query.id}
                       </span>
                       <span className="text-xs text-muted-foreground/70">{formatDate(query.created_at)}</span>
-                      <span
-                        className={`text-xs font-medium px-2 py-0.5 rounded-full border ${config.badge}`}
-                      >
-                        {config.label}
-                      </span>
+                      <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
                     </div>
-                    <h3 className="text-sm font-semibold text-foreground leading-snug mb-1">
+                    <h3 className="mb-1 text-sm font-semibold leading-snug text-foreground">
                       {query.question}
                     </h3>
                   </div>
                   <div className="flex-shrink-0 mt-1">
                     <i
-                      className={`ri-arrow-down-s-line text-muted-foreground/70 transition-transform ${
+                      className={cn("ri-arrow-down-s-line text-muted-foreground/70 transition-transform", 
                         expandedId === query.id ? "rotate-180" : ""
-                      }`}
-                    ></i>
+                      )}
+                    />
                   </div>
-                </button>
+                </Button>
 
                 {expandedId === query.id && (
                   <div className="px-5 pb-5 pt-2 border-t border-border bg-muted/50">
                     <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-livebook-pale flex items-center justify-center mt-0.5">
-                        <i className="ri-sparkling-line text-livebook text-sm"></i>
-                      </div>
+                      <IconFrame tone="accent" className="mt-0.5 size-8">
+                        <i className="ri-sparkling-line" />
+                      </IconFrame>
                       <div className="flex-1">
                         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">
-                          AI Response
+                          {t("AI Response")}
                         </p>
                         <FormattedText text={query.answer} />
                         <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                           {query.clause_ref && (
-                            <span className="rounded border bg-card px-2 py-1">{query.clause_ref}</span>
+                            <StatusBadge tone="neutral">{query.clause_ref}</StatusBadge>
                           )}
                           {query.position_used && (
-                            <span className="rounded border bg-card px-2 py-1">{query.position_used}</span>
+                            <StatusBadge tone="info">{query.position_used}</StatusBadge>
                           )}
                           {query.next_action && (
-                            <span className="basis-full rounded border bg-card px-2 py-1">{query.next_action}</span>
+                            <Notice tone="accent" className="basis-full">{query.next_action}</Notice>
                           )}
                         </div>
                       </div>

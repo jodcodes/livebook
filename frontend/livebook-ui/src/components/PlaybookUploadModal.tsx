@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocale } from "@/app/context/LocaleContext";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -118,6 +119,7 @@ function DiffBucket({
   tone: string;
   items?: DiffItem[];
 }) {
+  const { t } = useLocale();
   return (
     <section className="rounded-lg border border-border bg-card p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -130,7 +132,7 @@ function DiffBucket({
         </span>
       </div>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">None</p>
+        <p className="text-sm text-muted-foreground">{t("None")}</p>
       ) : (
         <div className="space-y-3">
           {items.map((item) => (
@@ -160,6 +162,7 @@ export default function PlaybookUploadModal({
   onUploadComplete,
   onClose,
 }: PlaybookUploadModalProps) {
+  const { t } = useLocale();
   const uploaderActor = localActor(uploaderRole === "lawyer" ? "lawyer" : "business");
   const [uploadMode, setUploadMode] = useState<UploadMode>("create");
   const [uploadState, setUploadState] = useState<UploadState>("idle");
@@ -191,7 +194,7 @@ export default function PlaybookUploadModal({
         setPlaybooks(list);
         setTargetPlaybookId((current) => current || list[0]?.id || "");
       } catch {
-        if (cancelled) setPlaybooks([]);
+        if (!cancelled) setPlaybooks([]);
       }
     }
     void loadPlaybooks();
@@ -205,7 +208,7 @@ export default function PlaybookUploadModal({
       const files = Array.from(fileList);
       const unsupported = files.find((file) => !isSupportedFile(file));
       if (unsupported) {
-        setErrorMessage(`${unsupported.name} is not supported. Use PDF, DOCX, or XLSX.`);
+        setErrorMessage(`${unsupported.name}: ${t("Unsupported file. Use PDF, DOCX, or XLSX.")}`);
         setUploadState("error");
         return;
       }
@@ -217,17 +220,17 @@ export default function PlaybookUploadModal({
         setPlaybookName(defaultNameFromFile(files[0]));
       }
     },
-    [playbookName]
+    [playbookName, t]
   );
 
   const uploadFiles = async () => {
     if (selectedFiles.length === 0) {
-      setErrorMessage("Choose at least one playbook source file.");
+      setErrorMessage(t("Choose at least one playbook source file."));
       setUploadState("error");
       return;
     }
     if (uploadMode === "update" && !targetPlaybookId) {
-      setErrorMessage("Choose an existing playbook to update.");
+      setErrorMessage(t("Choose an existing playbook to update."));
       setUploadState("error");
       return;
     }
@@ -271,7 +274,7 @@ export default function PlaybookUploadModal({
       }, 900);
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Network error. Is the backend running?"
+        err instanceof Error ? err.message : t("Network error. Is the backend running?")
       );
       setUploadState("error");
     }
@@ -324,10 +327,10 @@ export default function PlaybookUploadModal({
   };
 
   const title = draft
-    ? "Review Playbook Update"
+    ? t("Review Playbook Update")
     : uploadMode === "create"
-      ? "Create a Playbook"
-      : "Update a Playbook";
+      ? t("Create a Playbook")
+      : t("Update a Playbook");
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose?.()}>
@@ -341,9 +344,9 @@ export default function PlaybookUploadModal({
               <i className="ri-checkbox-circle-line text-xl" />
             </div>
             <DialogTitle className="text-xl">
-              {uploadMode === "update" ? "Playbook Updated" : "Playbook Created"}
+              {uploadMode === "update" ? t("Playbook Updated") : t("Playbook Created")}
             </DialogTitle>
-            <DialogDescription className="mt-2">Getting rules ready...</DialogDescription>
+            <DialogDescription className="mt-2">{t("Getting rules ready...")}</DialogDescription>
           </div>
         ) : (
           <>
@@ -354,8 +357,8 @@ export default function PlaybookUploadModal({
                     {title}
                   </DialogTitle>
                   <DialogDescription className="mt-2">
-                    Upload source files as{" "}
-                    {uploaderRole === "lawyer" ? "Legal Counsel" : "Business User"}.
+                    {t("Upload source files as ")}
+                    {uploaderRole === "lawyer" ? t("Legal Counsel") : t("Business User")}.
                   </DialogDescription>
                 </div>
                 <Button
@@ -363,7 +366,7 @@ export default function PlaybookUploadModal({
                   variant="outline"
                   size="icon-lg"
                   onClick={onClose}
-                  aria-label="Close"
+                  aria-label={t("Close")}
                 >
                   <i className="ri-close-line text-base" />
                 </Button>
@@ -392,22 +395,22 @@ export default function PlaybookUploadModal({
                       value="create"
                       className="h-10 rounded-md data-[state=on]:bg-card data-[state=on]:text-livebook-dark data-[state=on]:shadow-sm"
                     >
-                      New playbook
+                      {t("New playbook")}
                     </ToggleGroupItem>
                     <ToggleGroupItem
                       value="update"
                       className="h-10 rounded-md data-[state=on]:bg-card data-[state=on]:text-livebook-dark data-[state=on]:shadow-sm"
                     >
-                      Update existing
+                      {t("Update existing")}
                     </ToggleGroupItem>
                   </ToggleGroup>
 
                   {uploadMode === "update" ? (
                     <Field>
-                      <FieldLabel>Existing playbook</FieldLabel>
+                      <FieldLabel>{t("Existing playbook")}</FieldLabel>
                       <Select value={targetPlaybookId} onValueChange={setTargetPlaybookId}>
                         <SelectTrigger className="h-11 w-full">
-                          <SelectValue placeholder="Select playbook" />
+                          <SelectValue placeholder={t("Select playbook")} />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectGroup>
@@ -423,15 +426,15 @@ export default function PlaybookUploadModal({
                   ) : (
                     <FieldGroup className="grid min-w-0 gap-4 md:grid-cols-[minmax(240px,1fr)_minmax(180px,220px)_minmax(220px,260px)]">
                       <Field>
-                        <FieldLabel>Playbook name</FieldLabel>
+                        <FieldLabel>{t("Playbook name")}</FieldLabel>
                         <Input
                           value={playbookName}
                           onChange={(event) => setPlaybookName(event.target.value)}
-                          placeholder="Livebook NDA Playbook"
+                          placeholder={t("Livebook NDA Playbook")}
                         />
                       </Field>
                       <Field>
-                        <FieldLabel>Opposite party</FieldLabel>
+                        <FieldLabel>{t("Opposite party")}</FieldLabel>
                         <Select value={oppositePartyName} onValueChange={setOppositePartyName}>
                           <SelectTrigger className="h-11 w-full">
                             <SelectValue />
@@ -448,7 +451,7 @@ export default function PlaybookUploadModal({
                         </Select>
                       </Field>
                       <Field>
-                        <FieldLabel>Domain</FieldLabel>
+                        <FieldLabel>{t("Domain")}</FieldLabel>
                         <Select value={lawType} onValueChange={setLawType}>
                           <SelectTrigger className="h-11 w-full min-w-0">
                             <SelectValue />
@@ -498,10 +501,10 @@ export default function PlaybookUploadModal({
                       <div className="flex flex-col items-center">
                         <i className="ri-loader-4-line mb-3 text-2xl animate-spin text-livebook" />
                         <p className="text-sm font-medium text-foreground/80">
-                          Uploading and processing...
+                          {t("Uploading and processing...")}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground/70">
-                          This may take a few moments
+                          {t("This may take a few moments")}
                         </p>
                       </div>
                     ) : (
@@ -510,11 +513,10 @@ export default function PlaybookUploadModal({
                           <i className="ri-upload-cloud-2-line text-lg" />
                         </div>
                         <p className="text-sm font-semibold text-foreground">
-                          Drop source files here
+                          {t("Drop source files here")}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Click to browse.{" "}
-                          PDF, DOCX, and XLSX files are supported
+                          {t("Click to browse. PDF, DOCX, and XLSX files are supported")}
                         </p>
                       </>
                     )}
@@ -523,7 +525,7 @@ export default function PlaybookUploadModal({
                   {selectedFiles.length > 0 && (
                     <div className="rounded-lg border bg-muted/35 p-3">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Selected files
+                        {t("Selected files")}
                       </p>
                       <div className="mt-2 flex flex-wrap gap-2">
                         {selectedFiles.map((file) => (
@@ -544,34 +546,33 @@ export default function PlaybookUploadModal({
               {draft && (
                 <div className="space-y-4">
                   <Notice tone="warning">
-                    Review update for{" "}
+                    {t("Review update for ")}
                     <span className="font-semibold">
                       {selectedPlaybook?.name ?? draft.target_playbook_id}
                     </span>
-                    . Confirm applies {diffCount(draft.diff)} changes and creates next major
-                    version.
+                    {` ${diffCount(draft.diff)} ${t(". Confirm applies changes and creates next major version.")}`}
                   </Notice>
                   <div className="grid gap-3 md:grid-cols-2">
                     <DiffBucket
-                      title="Added"
+                      title={t("Added")}
                       icon="ri-add-circle-line"
                       tone="text-emerald-600"
                       items={draft.diff?.added}
                     />
                     <DiffBucket
-                      title="Updated"
+                      title={t("Updated")}
                       icon="ri-edit-2-line"
                       tone="text-livebook"
                       items={draft.diff?.updated}
                     />
                     <DiffBucket
-                      title="Removed"
+                      title={t("Removed")}
                       icon="ri-delete-bin-line"
                       tone="text-red-600"
                       items={draft.diff?.removed}
                     />
                     <DiffBucket
-                      title="Unchanged"
+                      title={t("Unchanged")}
                       icon="ri-checkbox-circle-line"
                       tone="text-muted-foreground"
                       items={draft.diff?.unchanged}
@@ -581,7 +582,7 @@ export default function PlaybookUploadModal({
               )}
 
               {uploadState === "error" && (
-                <Notice tone="danger" title="Upload failed" className="mt-4">
+                <Notice tone="danger" title={t("Upload failed")} className="mt-4">
                   <p>{errorMessage}</p>
                   <Button
                     type="button"
@@ -589,7 +590,7 @@ export default function PlaybookUploadModal({
                     onClick={handleRetry}
                     className="mt-1 h-auto p-0 text-destructive"
                   >
-                    Try again
+                    {t("Try again")}
                   </Button>
                 </Notice>
               )}
@@ -598,7 +599,7 @@ export default function PlaybookUploadModal({
             <DialogFooter className="mx-0 mb-0 mt-0 flex-row justify-end rounded-none border-t bg-card px-6 py-3">
               {draft && (
                 <Button type="button" variant="outline" onClick={() => setDraft(null)}>
-                  Back
+                  {t("Back")}
                 </Button>
               )}
               <Button
@@ -611,11 +612,11 @@ export default function PlaybookUploadModal({
                 )}
                 {draft
                   ? isConfirming
-                    ? "Applying..."
-                    : "Confirm update"
+                    ? t("Applying...")
+                    : t("Confirm update")
                   : uploadMode === "update"
-                    ? "Review update"
-                    : "Create playbook"}
+                    ? t("Review update")
+                    : t("Create playbook")}
               </Button>
             </DialogFooter>
           </>

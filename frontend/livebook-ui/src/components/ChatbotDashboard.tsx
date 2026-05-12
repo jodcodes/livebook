@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { decodeSharePayload } from "@/lib/shareEncoding";
 import { useAuth } from "../app/context/AuthContext";
+import { useLocale } from "@/app/context/LocaleContext";
 import PlaybookUploadModal from "./PlaybookUploadModal";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +47,7 @@ interface EscalationFormState {
 
 export default function ChatbotDashboard() {
   const { openPlaybookClause, userRole } = useAuth();
+  const { t, formatTime } = useLocale();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -85,7 +87,7 @@ export default function ChatbotDashboard() {
             id: "shared",
             role: "assistant",
             content: parsed.answer,
-            timestamp: "Shared",
+            timestamp: t("Shared"),
             clause_ref: parsed.clause_ref,
             position_used: parsed.position_used,
             escalation_required: parsed.escalation_required,
@@ -97,7 +99,7 @@ export default function ChatbotDashboard() {
       }
     }, 0);
     return () => window.clearTimeout(timeout);
-  }, []);
+  }, [t]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,10 +109,7 @@ export default function ChatbotDashboard() {
       id: Date.now().toString(),
       role: "user",
       content: input.trim(),
-      timestamp: new Date().toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
+      timestamp: formatTime(new Date()),
     };
 
     const priorMessages = messages;
@@ -140,10 +139,7 @@ export default function ChatbotDashboard() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: answer.answer,
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        timestamp: formatTime(new Date()),
         clause_ref: answer.clause_ref,
         position_used: answer.position_used,
         escalation_required: answer.escalation_required,
@@ -156,12 +152,9 @@ export default function ChatbotDashboard() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content: err instanceof Error ? err.message : String(err),
-        timestamp: new Date().toLocaleTimeString([], {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
+        timestamp: formatTime(new Date()),
         escalation_required: true,
-        next_action: "Ask Legal Counsel before relying on this answer.",
+        next_action: t("Review escalation before responding."),
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } finally {
@@ -172,9 +165,9 @@ export default function ChatbotDashboard() {
   const formatAnswer = (message: Message) =>
     [
       message.content,
-      message.clause_ref ? `Clause: ${message.clause_ref}` : null,
-      `Escalation: ${message.escalation_required ? "required" : "not required"}`,
-      message.next_action ? `Next action: ${message.next_action}` : null,
+      message.clause_ref ? `${t("Clause")}: ${message.clause_ref}` : null,
+      `${t("Escalation")}: ${message.escalation_required ? t("Escalation required") : t("Not required")}`,
+      message.next_action ? `${t("Next action")}: ${message.next_action}` : null,
     ]
       .filter(Boolean)
       .join("\n");
@@ -219,7 +212,7 @@ export default function ChatbotDashboard() {
 
   const submitEscalation = async (message: Message) => {
     setEscalationSubmitting(true);
-    setEscalationStatus((prev) => ({ ...prev, [message.id]: "Creating review item..." }));
+    setEscalationStatus((prev) => ({ ...prev, [message.id]: t("Creating review item...") }));
     try {
       const response = await fetch("/api/backend/escalations", {
         method: "POST",
@@ -237,12 +230,12 @@ export default function ChatbotDashboard() {
             display_name: escalationForm.lawyerName,
             email: escalationForm.lawyerEmail,
           },
-          question: questionFor(message) || "Shared chat answer",
+          question: questionFor(message) || t("Shared chat answer"),
           answer: message.content,
-          clause_ref: message.clause_ref ?? "Unknown clause",
+          clause_ref: message.clause_ref ?? t("Unknown clause"),
           position_used: message.position_used ?? "preferred",
           escalation_reason: escalationForm.reason,
-          next_action: message.next_action ?? "Review escalation before responding.",
+          next_action: message.next_action ?? t("Review escalation before responding."),
         }),
       });
       if (!response.ok) {
@@ -254,8 +247,8 @@ export default function ChatbotDashboard() {
       const notification = result.notification_result?.status ?? "queued";
       const note =
         notification === "failed"
-          ? "Queued for review; notification failed."
-          : `Queued for review; notification ${notification}.`;
+          ? t("Queued for review; notification failed.")
+          : t("Queued for review; notification queued.");
       setEscalationStatus((prev) => ({ ...prev, [message.id]: note }));
       setActiveEscalationId(null);
       setEscalationForm((prev) => ({ ...prev, reason: "" }));
@@ -272,10 +265,10 @@ export default function ChatbotDashboard() {
   return (
     <div className="flex h-screen flex-col bg-background">
       <PageHeader
-        eyebrow="Business guidance"
-        title="Livebook Chat"
-        description="Ask about contract rules, clauses, escalation triggers, and approved playbook positions."
-        actions={<StatusBadge tone="success">AI Online</StatusBadge>}
+        eyebrow={t("Business guidance")}
+        title={t("Livebook Chat")}
+        description={t("Ask about contract rules, clauses, escalation triggers, and approved playbook positions.")}
+        actions={<StatusBadge tone="success">{t("AI Online")}</StatusBadge>}
       />
 
       {/* Messages */}
@@ -284,8 +277,8 @@ export default function ChatbotDashboard() {
         {messages.length === 0 && (
           <PremiumEmpty
             icon={<i className="ri-sparkling-line text-base" />}
-            title="Ask Livebook about contract rules"
-            description="Find playbook rules, contract language, fallback options, and escalation triggers without reading the source document."
+            title={t("Ask Livebook about contract rules")}
+            description={t("Find playbook rules, contract language, fallback options, and escalation triggers without reading the source document.")}
             className="h-[calc(100vh-18rem)]"
           />
         )}
@@ -309,8 +302,8 @@ export default function ChatbotDashboard() {
               )}
             >
               {message.role === "assistant" && message.escalation_required && (
-                <Notice tone="danger" title="Escalation required" className="mb-3">
-                  Senior legal review is required before this position is accepted.
+                <Notice tone="danger" title={t("Escalation required")} className="mb-3">
+                  {t("Senior legal review is required before this position is accepted.")}
                 </Notice>
               )}
               <div className="whitespace-pre-wrap">
@@ -343,7 +336,7 @@ export default function ChatbotDashboard() {
                     ) : (
                       <i className="ri-file-copy-line text-base" data-icon="inline-start" />
                     )}
-                    {copiedMessageId === message.id ? "Copied" : "Copy"}
+                    {copiedMessageId === message.id ? t("Copied") : t("Copy")}
                   </Button>
                   {message.clause_ref && message.position_used !== "clarification" && (
                     <Button
@@ -353,7 +346,7 @@ export default function ChatbotDashboard() {
                       onClick={() => openPlaybookClause(message.clause_ref ?? "")}
                     >
                       <i className="ri-book-open-line text-base" data-icon="inline-start" />
-                      Open clause
+                      {t("Open clause")}
                     </Button>
                   )}
                   {message.escalation_required && (
@@ -368,7 +361,7 @@ export default function ChatbotDashboard() {
                       }
                     >
                       <i className="ri-arrow-right-up-line text-base" data-icon="inline-start" />
-                      Escalate
+                      {t("Escalate")}
                     </Button>
                   )}
                 </div>
@@ -385,7 +378,7 @@ export default function ChatbotDashboard() {
                   >
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       <label className="text-xs font-semibold text-red-900">
-                        Lawyer
+                        {t("Lawyer")}
                         <Input
                           value={escalationForm.lawyerName}
                           onChange={(event) =>
@@ -398,7 +391,7 @@ export default function ChatbotDashboard() {
                         />
                       </label>
                       <label className="text-xs font-semibold text-red-900">
-                        Email
+                        {t("Email")}
                         <Input
                           type="email"
                           value={escalationForm.lawyerEmail}
@@ -413,7 +406,7 @@ export default function ChatbotDashboard() {
                       </label>
                     </div>
                     <label className="mt-2 block text-xs font-semibold text-red-900">
-                      Reason
+                      {t("Reason")}
                       <Textarea
                         value={escalationForm.reason}
                         onChange={(event) =>
@@ -423,7 +416,7 @@ export default function ChatbotDashboard() {
                           }))
                         }
                         className="mt-1 h-20 bg-card"
-                        placeholder="Counterparty asks for a red-line position"
+                        placeholder={t("Counterparty asks for a red-line position")}
                       />
                     </label>
                     <div className="mt-3 flex items-center gap-2">
@@ -434,7 +427,7 @@ export default function ChatbotDashboard() {
                         disabled={escalationSubmitting}
                       >
                         <i className="ri-alarm-warning-line text-base" data-icon="inline-start" />
-                        Notify lawyer
+                        {t("Notify lawyer")}
                       </Button>
                       <Button
                         type="button"
@@ -442,7 +435,7 @@ export default function ChatbotDashboard() {
                         size="sm"
                         onClick={() => setActiveEscalationId(null)}
                       >
-                        Cancel
+                        {t("Cancel")}
                       </Button>
                     </div>
                   </form>
@@ -484,14 +477,14 @@ export default function ChatbotDashboard() {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about liability limits, indemnification, termination clauses..."
+              placeholder={t("Ask about liability limits, indemnification, termination clauses...")}
             />
             <InputGroupAddon align="inline-end">
               <InputGroupButton
                 type="button"
                 onClick={() => setShowUpload(true)}
-                aria-label="Upload playbook"
-                title="Upload playbook"
+                aria-label={t("Upload playbook")}
+                title={t("Upload playbook")}
                 size="icon-sm"
               >
                 <i className="ri-attachment-line text-base" />
@@ -503,14 +496,13 @@ export default function ChatbotDashboard() {
             disabled={!input.trim() || loading}
             size="icon-lg"
             className="shrink-0"
-            aria-label="Send message"
+            aria-label={t("Send message")}
           >
             {loading ? <i className="ri-loader-4-line animate-spin text-base" /> : <i className="ri-send-plane-line text-base" />}
           </Button>
         </form>
         <p className="mt-3 text-center text-xs text-muted-foreground">
-          Livebook may produce inaccurate information. Always verify critical
-          legal decisions with Legal Counsel.
+          {t("Livebook may produce inaccurate information. Always verify critical legal decisions with Legal Counsel.")}
         </p>
       </div>
       {showUpload && (
