@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.LIVEBOOK_BACKEND_URL ?? "http://127.0.0.1:3020";
+const backendUrl = process.env.LIVEBOOK_BACKEND_URL ?? "http://127.0.0.1:5002";
 
 const nextConfig: NextConfig = {
     async rewrites() {

@@ -32,7 +32,7 @@ impl AppConfig {
         let backend_port = env::var("LIVEBOOK_BACKEND_PORT")
             .ok()
             .and_then(|raw| raw.parse::<u16>().ok())
-            .unwrap_or(3020);
+            .unwrap_or(5002);
         let openai_embedding_dimensions = env::var("OPENAI_EMBEDDING_DIMENSIONS")
             .ok()
             .and_then(|raw| raw.parse::<usize>().ok())
@@ -42,7 +42,9 @@ impl AppConfig {
             database_url,
             backend_host,
             backend_port,
-            openai_api_key: env::var("OPENAI_API_KEY").ok().filter(|value| !value.is_empty()),
+            openai_api_key: env::var("OPENAI_API_KEY")
+                .ok()
+                .filter(|value| !value.is_empty()),
             openai_model: env::var("OPENAI_MODEL").unwrap_or_else(|_| "gpt-5.5".to_string()),
             openai_embedding_model: env::var("OPENAI_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "text-embedding-3-small".to_string()),
@@ -82,7 +84,8 @@ fn actor_from_env(
     default_role: &str,
 ) -> ActorConfig {
     ActorConfig {
-        user_id: env::var(format!("{prefix}_USER_ID")).unwrap_or_else(|_| default_user_id.to_string()),
+        user_id: env::var(format!("{prefix}_USER_ID"))
+            .unwrap_or_else(|_| default_user_id.to_string()),
         display_name: env::var(format!("{prefix}_DISPLAY_NAME"))
             .unwrap_or_else(|_| default_display_name.to_string()),
         email: env::var(format!("{prefix}_EMAIL")).unwrap_or_else(|_| default_email.to_string()),

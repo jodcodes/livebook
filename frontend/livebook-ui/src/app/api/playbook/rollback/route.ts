@@ -1,27 +1,22 @@
-import { NextRequest } from "next/server";
-
-export async function GET(request: NextRequest) {
+export async function POST(request: Request) {
   const backendBaseUrl = process.env.LIVEBOOK_BACKEND_URL ?? "http://127.0.0.1:5002";
-  const q = request.nextUrl.searchParams.get("q");
+  const backendUrl = `${backendBaseUrl}/playbook/rollback`;
 
-  console.log("[PROXY /api/question] Incoming GET request");
-  console.log("  q:", q);
-
-  if (!q || q.trim().length === 0) {
-    return Response.json(
-      { error: "Missing query parameter 'q'" },
-      { status: 400 }
-    );
-  }
-
-  const url = `${backendBaseUrl}/question?q=${encodeURIComponent(q)}`;
+  console.log("[PROXY /api/playbook/rollback] Incoming POST request");
 
   try {
-    const backendResponse = await fetch(url, {
-      method: "GET",
+    const body = await request.text();
+    console.log("  body:", body.substring(0, 500));
+
+    const backendResponse = await fetch(backendUrl, {
+      method: "POST",
+      headers: {
+        "content-type": request.headers.get("content-type") || "application/json",
+      },
+      body,
     });
 
-    console.log("[PROXY /api/question] Backend response:");
+    console.log("[PROXY /api/playbook/rollback] Backend response:");
     console.log("  status:", backendResponse.status, backendResponse.statusText);
 
     const responseBody = await backendResponse.text();
@@ -38,7 +33,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error("[PROXY /api/question] Proxy error:", error);
+    console.error("[PROXY /api/playbook/rollback] Proxy error:", error);
     return Response.json(
       { error: "Proxy error", details: String(error) },
       { status: 500 }

@@ -11,8 +11,8 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const require = createRequire(import.meta.url);
 const devCerts = require("office-addin-dev-certs");
 const dist = path.join(root, "dist");
-const port = Number(process.env.PORT ?? 3001);
-const backendUrl = new URL(process.env.LIVEBOOK_BACKEND_URL ?? "http://127.0.0.1:3020");
+const port = Number(process.env.PORT ?? 5001);
+const backendUrl = new URL(process.env.LIVEBOOK_BACKEND_URL ?? "http://127.0.0.1:5002");
 
 const httpsOptions = await devCerts.getHttpsServerOptions(365);
 

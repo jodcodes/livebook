@@ -10,7 +10,7 @@ const required = [
   "<Hosts>",
   '<Host Name="Document"',
   "<Permissions>ReadWriteDocument</Permissions>",
-  "https://localhost:3001/taskpane.html",
+  "https://localhost:5001/taskpane.html",
   "Livebook.TaskpaneButton",
   "WordApi",
 ];

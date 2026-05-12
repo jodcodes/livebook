@@ -26,9 +26,9 @@ console.log("");
 checkManifestSource();
 checkWefFolder();
 checkOfficeCache();
-await checkHttps("https://localhost:3001/taskpane.html", "Add-in taskpane");
-await checkHttps("https://localhost:3001/assets/icon-32.png", "Add-in icon");
-await checkTcp("127.0.0.1", 3020, "Backend");
+await checkHttps("https://localhost:5001/taskpane.html", "Add-in taskpane");
+await checkHttps("https://localhost:5001/assets/icon-32.png", "Add-in icon");
+await checkTcp("127.0.0.1", 5002, "Backend");
 
 console.log("");
 console.log("If the manifest checks pass but Word still does not show Livebook:");
@@ -39,7 +39,7 @@ console.log("4. If it is still missing, run npm run reset-word-cache && npm run 
 
 function checkManifestSource() {
   const hasWordHost = manifest.includes('<Host Name="Document"');
-  const hasSource = manifest.includes("https://localhost:3001/taskpane.html");
+  const hasSource = manifest.includes("https://localhost:5001/taskpane.html");
   print("Repo manifest", hasWordHost && hasSource, manifestPath);
 }
 
