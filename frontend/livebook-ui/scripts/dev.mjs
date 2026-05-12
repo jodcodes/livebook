@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 
-const child = spawn("next", ["dev", "--webpack", "-p", "3002"], {
+const port = Number(process.env.LIVEBOOK_UI_PORT ?? process.env.PORT ?? 3002);
+const child = spawn("next", ["dev", "--webpack", "-p", String(port)], {
   env: {
     ...process.env,
     WATCHPACK_POLLING: process.env.WATCHPACK_POLLING ?? "true",

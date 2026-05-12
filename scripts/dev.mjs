@@ -24,7 +24,7 @@ const uiPort = Number(process.env.LIVEBOOK_UI_PORT ?? 3002);
 const addinPort = Number(process.env.LIVEBOOK_ADDIN_PORT ?? 3001);
 
 const backendUrl = `http://127.0.0.1:${backendPort}`;
-const uiUrl = `http://127.0.0.1:${uiPort}`;
+const uiUrl = `http://localhost:${uiPort}`;
 const addinUrl = `https://127.0.0.1:${addinPort}`;
 let gatewayServer;
 let shuttingDown = false;
@@ -36,6 +36,8 @@ const children = [
   }),
   run("livebook-ui", "npm", ["run", "dev"], uiRoot, {
     LIVEBOOK_BACKEND_URL: backendUrl,
+    LIVEBOOK_UI_PORT: String(uiPort),
+    PORT: String(uiPort),
   }),
   run("addin", "npm", ["run", "dev"], addinRoot, {
     LIVEBOOK_BACKEND_URL: backendUrl,
@@ -137,6 +139,12 @@ function isAddinPath(pathname) {
 
 function proxyRequest(req, res, targetBaseUrl) {
   const target = new URL(targetBaseUrl);
+  const pathname = new URL(req.url ?? "/", "https://localhost").pathname;
+  if (pathname === "/" && targetBaseUrl === uiUrl) {
+    void proxyRootPageViaFetch(res, targetBaseUrl);
+    return;
+  }
+
   const client = target.protocol === "https:" ? https : http;
   const options = {
     hostname: target.hostname,
@@ -161,6 +169,22 @@ function proxyRequest(req, res, targetBaseUrl) {
   });
 
   req.pipe(upstream);
+}
+
+async function proxyRootPageViaFetch(res, targetBaseUrl) {
+  try {
+    const upstream = await fetch(new URL("/", targetBaseUrl));
+    const headers = new Headers(upstream.headers);
+    headers.delete("content-length");
+    headers.delete("transfer-encoding");
+    headers.delete("content-encoding");
+
+    res.writeHead(upstream.status, Object.fromEntries(headers));
+    res.end(await upstream.text());
+  } catch (error) {
+    res.writeHead(502, { "content-type": "text/plain" });
+    res.end(`Gateway proxy error to ${targetBaseUrl}: ${error.message}`);
+  }
 }
 
 function proxyUpgrade(req, clientSocket, head, targetBaseUrl) {
