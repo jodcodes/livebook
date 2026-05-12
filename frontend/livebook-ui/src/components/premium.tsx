@@ -4,6 +4,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export type StatusTone =
@@ -171,6 +172,62 @@ export function Panel({
       )}
       <CardContent className={cn("p-5", contentClassName)}>{children}</CardContent>
     </Card>
+  );
+}
+
+export function FilterBar({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "legal-hairline shrink-0 border-b bg-card/92 px-5 py-3 backdrop-blur supports-[backdrop-filter]:bg-card/82 lg:px-6",
+        className
+      )}
+    >
+      <div className="flex min-w-0 flex-wrap items-center gap-3">{children}</div>
+    </div>
+  );
+}
+
+export function SearchField({
+  className,
+  inputClassName,
+  ...props
+}: React.ComponentProps<typeof Input> & {
+  inputClassName?: string;
+}) {
+  return (
+    <div className={cn("relative min-w-0 flex-1", className)}>
+      <i className="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-base text-muted-foreground/70" />
+      <Input className={cn("pl-10", inputClassName)} {...props} />
+    </div>
+  );
+}
+
+export function IconFrame({
+  children,
+  tone = "neutral",
+  className,
+}: {
+  children: React.ReactNode;
+  tone?: StatusTone;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted",
+        statusIconClasses[tone],
+        className
+      )}
+    >
+      {children}
+    </div>
   );
 }
 
