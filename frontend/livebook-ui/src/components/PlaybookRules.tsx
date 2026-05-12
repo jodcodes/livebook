@@ -535,7 +535,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] font-medium text-muted-foreground">
                     <span className="font-mono">{clause.original_clause_id ?? clause.clause_id}</span>
-                    <span>{clause.playbook_name ?? t("Default Playbook")}</span>
+                    <span>{clause.playbook_name?.trim() || t("Untitled playbook")}</span>
                     <span>{clause.law_type ?? t("General Commercial")}</span>
                     <span>{clause.party_name ?? t("Opposite party")}</span>
                   </div>
@@ -567,7 +567,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       {selectedClause.name}
                     </h1>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {selectedClause.playbook_name ?? t("Default Playbook")} ·{" "}
+                      {selectedClause.playbook_name?.trim() || t("Untitled playbook")} ·{" "}
                       {selectedClause.law_type ?? t("General Commercial")} ·{" "}
                       {selectedClause.party_name ?? t("Opposite party")} · v
                       {selectedClause.meta?.version ?? 1}

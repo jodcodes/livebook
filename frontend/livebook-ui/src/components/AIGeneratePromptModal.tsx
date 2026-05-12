@@ -87,7 +87,7 @@ export default function AIGeneratePromptModal({
             <textarea
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
-              placeholder="e.g., Create a rule about AI model training data rights. The vendor should retain ownership but grant us a perpetual license. Escalate if they ask for unlimited derivative works."
+              placeholder="Describe the rule you want to generate."
               rows={5}
               className="w-full px-3 py-2.5 rounded-lg border border-border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-livebook/20 focus:border-livebook resize-none"
             />

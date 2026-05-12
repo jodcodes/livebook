@@ -9,23 +9,20 @@ export interface LocalActor {
 
 const businessActor: LocalActor = {
   user_id:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_USER_ID ?? "local-business-user",
+    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_USER_ID ?? "",
   display_name:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME ?? "Business User",
+    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME ?? "",
   email:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_EMAIL ??
-    "business.user@example.com",
+    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_EMAIL ?? "",
   role: process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_ROLE ?? "business_user",
 };
 
 const lawyerActor: LocalActor = {
   user_id:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_USER_ID ?? "local-legal-counsel",
+    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_USER_ID ?? "",
   display_name:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME ?? "Legal Counsel",
-  email:
-    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_EMAIL ??
-    "legal.counsel@example.com",
+    process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME ?? "",
+  email: process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_EMAIL ?? "",
   role: process.env.NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_ROLE ?? "lawyer",
 };
 

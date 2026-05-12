@@ -914,24 +914,24 @@ mod tests {
     fn clarification_answer_asks_when_scope_is_ambiguous() {
         let playbook = json!([
             {
-                "clause_id": "globex:NDA-01",
+                "clause_id": "counterparty-a:NDA-01",
                 "name": "Liability",
                 "clause_type": "Liability",
                 "law_type": "General Commercial",
-                "playbook_id": "globex",
-                "playbook_name": "Globex NDA",
-                "party_name": "Globex GmbH",
+                "playbook_id": "counterparty-a",
+                "playbook_name": "Playbook A",
+                "party_name": "Counterparty A",
                 "keywords": ["liability cap"],
                 "meta": { "review_status": "approved" }
             },
             {
-                "clause_id": "initech:SLA-01",
+                "clause_id": "counterparty-b:SLA-01",
                 "name": "Service Levels",
                 "clause_type": "Service Levels",
                 "law_type": "Digital Industries / Automation",
-                "playbook_id": "initech",
-                "playbook_name": "Initech SaaS",
-                "party_name": "Initech Ltd",
+                "playbook_id": "counterparty-b",
+                "playbook_name": "Playbook B",
+                "party_name": "Counterparty B",
                 "keywords": ["uptime"],
                 "meta": { "review_status": "approved" }
             }
@@ -950,24 +950,24 @@ mod tests {
     fn clarification_answer_allows_clear_clause_keyword() {
         let playbook = json!([
             {
-                "clause_id": "globex:NDA-01",
+                "clause_id": "counterparty-a:NDA-01",
                 "name": "Liability",
                 "clause_type": "Liability",
                 "law_type": "General Commercial",
-                "playbook_id": "globex",
-                "playbook_name": "Globex NDA",
-                "party_name": "Globex GmbH",
+                "playbook_id": "counterparty-a",
+                "playbook_name": "Playbook A",
+                "party_name": "Counterparty A",
                 "keywords": ["liability cap"],
                 "meta": { "review_status": "approved" }
             },
             {
-                "clause_id": "initech:SLA-01",
+                "clause_id": "counterparty-b:SLA-01",
                 "name": "Service Levels",
                 "clause_type": "Service Levels",
                 "law_type": "Digital Industries / Automation",
-                "playbook_id": "initech",
-                "playbook_name": "Initech SaaS",
-                "party_name": "Initech Ltd",
+                "playbook_id": "counterparty-b",
+                "playbook_name": "Playbook B",
+                "party_name": "Counterparty B",
                 "keywords": ["uptime"],
                 "meta": { "review_status": "approved" }
             }

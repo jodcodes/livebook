@@ -612,7 +612,7 @@ fn normalize_playbook_type(input: Option<&str>) -> String {
 
 fn default_party_name(playbook_type: &str) -> String {
     let _ = playbook_type;
-    "Globex GmbH".to_string()
+    String::new()
 }
 
 fn normalize_law_type(input: Option<&str>, fallback_text: &str) -> String {
@@ -1081,7 +1081,7 @@ fn existing_playbook_metadata(
         name: clause
             .get("playbook_name")
             .and_then(Value::as_str)
-            .unwrap_or("Default Playbook")
+            .unwrap_or("")
             .to_string(),
         playbook_type: playbook_type.clone(),
         party_name: clause
@@ -1614,7 +1614,7 @@ pub async fn get_playbooks() -> Result<Json<Vec<PlaybookSummary>>, (StatusCode, 
         let playbook_name = clause
             .get("playbook_name")
             .and_then(Value::as_str)
-            .unwrap_or("Default Playbook")
+            .unwrap_or("")
             .to_string();
         let playbook_type = clause
             .get("playbook_type")
@@ -2226,7 +2226,7 @@ fn normalize_clause_with_created_at(clause: &mut Value, fallback_created_at: Opt
         .or_insert_with(|| Value::String("default".to_string()));
     object
         .entry("playbook_name".to_string())
-        .or_insert_with(|| Value::String("Default Playbook".to_string()));
+        .or_insert_with(|| Value::String(String::new()));
     object
         .entry("playbook_type".to_string())
         .or_insert_with(|| Value::String("opposite_party".to_string()));
@@ -3823,13 +3823,13 @@ mod tests {
 
         stamp_uploaded_playbook(
             &mut playbook,
-            "globex-playbook",
-            "Globex Playbook",
+            "playbook-a",
+            "Playbook A",
             "opposite_party",
-            "Globex GmbH",
+            "Counterparty A",
             "General Commercial",
             "2026-04-25T21:00:00Z",
-            &["Globex NDA.pdf".to_string()],
+            &["Playbook A.pdf".to_string()],
             &uploader,
             &mut existing_ids,
         );
@@ -3865,13 +3865,13 @@ mod tests {
 
         stamp_uploaded_playbook(
             &mut playbook,
-            "business-playbook",
-            "Business Playbook",
+            "playbook-b",
+            "Playbook B",
             "opposite_party",
-            "Globex GmbH",
+            "Counterparty B",
             "General Commercial",
             "2026-04-25T21:00:00Z",
-            &["Business Playbook.docx".to_string()],
+            &["Playbook B.docx".to_string()],
             &uploader,
             &mut existing_ids,
         );
@@ -3906,13 +3906,13 @@ mod tests {
 
         stamp_uploaded_playbook(
             &mut playbook,
-            "legal-playbook",
-            "Legal Playbook",
+            "playbook-c",
+            "Playbook C",
             "opposite_party",
-            "Globex GmbH",
+            "Counterparty C",
             "General Commercial",
             "2026-04-25T21:00:00Z",
-            &["Legal Playbook.pdf".to_string()],
+            &["Playbook C.pdf".to_string()],
             &uploader,
             &mut existing_ids,
         );

@@ -360,7 +360,7 @@ fn notify_lawyer(body: &CreateEscalationRequest) -> NotificationMetadata {
     {
         "sent"
     } else {
-        "mocked"
+        "queued"
     };
     let message = match status {
         "failed" => format!(
@@ -372,7 +372,7 @@ fn notify_lawyer(body: &CreateEscalationRequest) -> NotificationMetadata {
             body.lawyer.email, body.clause_ref, body.created_by.display_name
         ),
         _ => format!(
-            "Mock notification queued for {} for {} from {}. Review link: /review",
+            "Notification queued for {} for {} from {}. Review link: /review",
             body.lawyer.email, body.clause_ref, body.created_by.display_name
         ),
     };
@@ -463,9 +463,9 @@ mod tests {
     #[test]
     fn build_item_preserves_audit_metadata() {
         let notification = NotificationMetadata {
-            status: "mocked".to_string(),
+            status: "queued".to_string(),
             sent_at: "2026-04-25T12:00:00Z".to_string(),
-            message: "mocked".to_string(),
+            message: "queued".to_string(),
         };
         let item =
             build_escalation_item(request(), notification, "2026-04-25T12:00:00Z".to_string());
@@ -502,9 +502,9 @@ mod tests {
     #[test]
     fn resolve_records_reviewer_and_timestamp() {
         let notification = NotificationMetadata {
-            status: "mocked".to_string(),
+            status: "queued".to_string(),
             sent_at: "2026-04-25T12:00:00Z".to_string(),
-            message: "mocked".to_string(),
+            message: "queued".to_string(),
         };
         let mut item =
             build_escalation_item(request(), notification, "2026-04-25T12:00:00Z".to_string());

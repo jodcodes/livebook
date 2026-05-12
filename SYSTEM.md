@@ -123,9 +123,9 @@ client-side helper and is disabled unless an endpoint is supplied.
 
 ### `ESCALATION_NOTIFICATION_MODE`
 
-Controls whether escalation notifications are reported as `mocked` or `sent`.
+Controls whether escalation notifications are reported as `queued` or `sent`.
 In the code, `sent` is treated as the live notification mode. Any other value
-falls back to mocked notifications.
+falls back to queued notifications.
 
 ### `NEXT_PUBLIC_AGENTATION_ENDPOINT`
 

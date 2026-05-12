@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useSyncExternalStore,
+} from "react";
 
 import {
   LOCALE_STORAGE_KEY,
@@ -27,12 +34,41 @@ interface LocaleContextType {
 }
 
 const LocaleContext = createContext<LocaleContextType | undefined>(undefined);
+const LOCALE_CHANGE_EVENT = "livebook-locale-change";
+
+function subscribeToLocaleChanges(callback: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handler = () => callback();
+  window.addEventListener("storage", handler);
+  window.addEventListener(LOCALE_CHANGE_EVENT, handler);
+
+  return () => {
+    window.removeEventListener("storage", handler);
+    window.removeEventListener(LOCALE_CHANGE_EVENT, handler);
+  };
+}
 
 export function LocaleProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(detectPreferredLocale);
+  const locale = useSyncExternalStore<Locale>(
+    subscribeToLocaleChanges,
+    detectPreferredLocale,
+    () => "en",
+  );
+
+  const setLocale = useCallback((nextLocale: Locale) => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(LOCALE_STORAGE_KEY, nextLocale);
+    document.documentElement.lang = nextLocale;
+    window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
+  }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     document.documentElement.lang = locale;
   }, [locale]);
 
@@ -46,7 +82,7 @@ export function LocaleProvider({ children }: { children: React.ReactNode }) {
       formatTime: (value) => formatTime(locale, value),
       formatEnumLabel: (value) => formatEnumLabel(locale, value),
     }),
-    [locale],
+    [locale, setLocale],
   );
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

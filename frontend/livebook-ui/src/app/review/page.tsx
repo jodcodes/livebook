@@ -309,7 +309,7 @@ export default function ReviewPage() {
           createdAt: clause.meta?.created_at ?? "",
           createdBy: clause.meta?.created_by ?? clause.meta?.approved_by ?? t("Legal Counsel"),
           createdFrom: formatEnumLabel(clause.meta?.created_from ?? "playbook_ingest"),
-          playbookName: clause.playbook_name ?? t("Default Playbook"),
+          playbookName: clause.playbook_name?.trim() || t("Untitled playbook"),
           counterparty: clause.party_name ?? `${t("Unknown")} ${t("Counterparty").toLowerCase()}`,
           sourceLabel: clauseSourceLabel(clause, formatEnumLabel, t),
           reason: clauseAttentionReason(clause, hasPendingSuggestion, t),

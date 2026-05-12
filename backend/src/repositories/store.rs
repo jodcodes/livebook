@@ -455,7 +455,7 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
         let name = sample
             .get("playbook_name")
             .and_then(Value::as_str)
-            .unwrap_or("Default Playbook");
+            .unwrap_or("");
         let playbook_type = sample
             .get("playbook_type")
             .and_then(Value::as_str)
@@ -463,11 +463,11 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
         let party_name = sample
             .get("party_name")
             .and_then(Value::as_str)
-            .unwrap_or("Default Counterparty");
+            .unwrap_or("");
         let law_type = sample
             .get("law_type")
             .and_then(Value::as_str)
-            .unwrap_or("General");
+            .unwrap_or("");
         let payload = Value::Array(clauses.clone());
         let clause_count = clauses.len() as i32;
 

@@ -125,7 +125,7 @@ export default function Sidebar() {
           </div>
           <div className={cn("min-w-0 flex-1", isCollapsed && "sr-only", "max-sm:sr-only")}>
             <p className="truncate text-sm font-medium">{roleLabel}</p>
-            <p className="truncate text-xs text-muted-foreground">{t("Demo workspace")}</p>
+            <p className="truncate text-xs text-muted-foreground">{t("Workspace")}</p>
           </div>
           <StatusBadge tone="accent" className={cn(isCollapsed && "sr-only", "max-sm:sr-only")}>
             {t("Live")}

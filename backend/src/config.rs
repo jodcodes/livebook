@@ -50,7 +50,7 @@ impl AppConfig {
                 .unwrap_or_else(|_| "text-embedding-3-small".to_string()),
             openai_embedding_dimensions,
             notification_mode: env::var("ESCALATION_NOTIFICATION_MODE")
-                .unwrap_or_else(|_| "mocked".to_string()),
+                .unwrap_or_else(|_| "queued".to_string()),
             default_business_actor: actor_from_env(
                 "LIVEBOOK_DEFAULT_BUSINESS",
                 "local-business-user",

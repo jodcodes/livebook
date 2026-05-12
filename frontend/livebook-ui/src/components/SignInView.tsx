@@ -112,7 +112,7 @@ export default function SignInView() {
 
             <Separator className="my-3" />
             <p className="text-center text-xs text-muted-foreground">
-              {t("Explore the demo workspace and switch roles at any time.")}
+              {t("Explore the workspace and switch roles at any time.")}
             </p>
           </CardContent>
         </Card>

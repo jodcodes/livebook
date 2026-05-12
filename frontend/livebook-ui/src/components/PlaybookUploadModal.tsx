@@ -23,7 +23,6 @@ import { localActor } from "@/lib/actorDefaults";
 type UploadState = "idle" | "uploading" | "success" | "error";
 type UploadMode = "create" | "update";
 
-const OPPOSITE_PARTY_NAMES = ["Globex GmbH", "Acme Corp", "Initech Ltd"];
 const LAW_DOMAINS = [
   "Commercial Contracts",
   "Procurement & Supply Chain",
@@ -172,7 +171,7 @@ export default function PlaybookUploadModal({
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [playbookName, setPlaybookName] = useState("");
-  const [oppositePartyName, setOppositePartyName] = useState(OPPOSITE_PARTY_NAMES[0]);
+  const [oppositePartyName, setOppositePartyName] = useState("");
   const [lawType, setLawType] = useState(LAW_DOMAINS[0]);
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [targetPlaybookId, setTargetPlaybookId] = useState("");
@@ -432,25 +431,16 @@ export default function PlaybookUploadModal({
                         <Input
                           value={playbookName}
                           onChange={(event) => setPlaybookName(event.target.value)}
-                          placeholder={t("Livebook NDA Playbook")}
+                          placeholder={t("Playbook name")}
                         />
                       </Field>
                       <Field>
-                        <FieldLabel>{t("Opposite party")}</FieldLabel>
-                        <Select value={oppositePartyName} onValueChange={setOppositePartyName}>
-                          <SelectTrigger className="h-11 w-full">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectGroup>
-                              {OPPOSITE_PARTY_NAMES.map((name) => (
-                                <SelectItem key={name} value={name}>
-                                  {name}
-                                </SelectItem>
-                              ))}
-                            </SelectGroup>
-                          </SelectContent>
-                        </Select>
+                        <FieldLabel>{t("Counterparty")}</FieldLabel>
+                        <Input
+                          value={oppositePartyName}
+                          onChange={(event) => setOppositePartyName(event.target.value)}
+                          placeholder={t("Counterparty")}
+                        />
                       </Field>
                       <Field>
                         <FieldLabel>{t("Domain")}</FieldLabel>
