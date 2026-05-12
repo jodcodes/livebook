@@ -421,7 +421,7 @@ const TRANSLATIONS: Record<Locale, Record<string, string>> = {
     "Search contract, counterparty, clause, evidence...": "Vertrag, Gegenpartei, Klausel, Beleg durchsuchen...",
     "Outcome": "Ergebnis",
     "All outcomes": "Alle Ergebnisse",
-    "Confidence": "Sicherheit",
+    "Confidence": "Confidence",
     "All confidence": "Alle Sicherheitsstufen",
     "Insights Applied": "Insights angewendet",
     "Generate Suggestions": "Vorschläge erzeugen",
