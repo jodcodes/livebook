@@ -31,6 +31,10 @@ legal and business users can work from the same source of truth.
 
 See [QUICKSTART.md](QUICKSTART.md) for a short, copy-paste friendly setup guide.
 
+## System
+
+See [SYSTEM.md](SYSTEM.md) for the full architecture and data-flow overview.
+
 ## Environment
 
 Required variables:
