@@ -34,17 +34,38 @@ const statusIconClasses: Record<StatusTone, string> = {
 };
 
 export function statusTone(value?: string): StatusTone {
-  const key = (value ?? "").toLowerCase();
-  if (key.includes("red") || key.includes("reject") || key.includes("fail") || key.includes("escalat")) {
+  const key = (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[ -]+/g, "_");
+  if (
+    key === "rejected" ||
+    key === "failed" ||
+    key === "escalated" ||
+    key === "red_line_breached"
+  ) {
     return "danger";
   }
-  if (key.includes("pending") || key.includes("fallback") || key.includes("low") || key.includes("review")) {
+  if (
+    key === "pending" ||
+    key === "pending_review" ||
+    key === "review_pending" ||
+    key === "fallback_1" ||
+    key === "fallback_2" ||
+    key === "low"
+  ) {
     return "warning";
   }
-  if (key.includes("approve") || key.includes("preferred") || key.includes("resolved") || key.includes("high") || key.includes("ok")) {
+  if (
+    key === "approved" ||
+    key === "preferred" ||
+    key === "resolved" ||
+    key === "high" ||
+    key === "ok"
+  ) {
     return "success";
   }
-  if (key.includes("evolve") || key.includes("suggest") || key.includes("medium")) {
+  if (key === "evolve_suggestion" || key === "suggestion" || key === "medium") {
     return "info";
   }
   return "neutral";
@@ -281,7 +302,9 @@ export function Notice({
     <Alert className={cn("border", toneClasses[tone], className)}>
       <i className={cn("text-base", iconClass, statusIconClasses[tone])} />
       {title ? <AlertTitle>{title}</AlertTitle> : null}
-      <AlertDescription>{children}</AlertDescription>
+      <AlertDescription className="whitespace-normal break-words leading-6 text-pretty">
+        {children}
+      </AlertDescription>
     </Alert>
   );
 }

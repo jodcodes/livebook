@@ -6,6 +6,7 @@ import { useLocale } from "@/app/context/LocaleContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Notice, PremiumEmpty, StatusBadge, statusTone } from "@/components/premium";
 import { localActor } from "@/lib/actorDefaults";
 import { cn } from "@/lib/utils";
@@ -202,6 +203,10 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
   }, [isResizingColumn]);
 
   const rows = useMemo(() => activeSession?.rows ?? [], [activeSession?.rows]);
+  const eligibleInsightCount = useMemo(
+    () => rows.filter((row) => !row.applied && row.confidence !== "low").length,
+    [rows]
+  );
   const tableMinWidth = useMemo(
     () => Object.values(columnWidths).reduce((total, width) => total + width, 0),
     [columnWidths]
@@ -343,6 +348,10 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
 
   async function applyInsights() {
     if (!activeSession) return;
+    const confirmed = window.confirm(
+      t("This will add eligible review rows to negotiation history and send resulting playbook recommendations to the review queue. It will not change the playbook directly. Do you want to continue?")
+    );
+    if (!confirmed) return;
     setError(null);
     setNotice(null);
     try {
@@ -354,7 +363,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
         }
       );
       setActiveSession(updated);
-      setNotice(t("Insights added to negotiation history. Evolve suggestions are ready for review."));
+      setNotice(t("Insights added to negotiation history. Resulting playbook recommendations were sent to the review queue."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -426,14 +435,31 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Metric label={t("Contracts")} value={activeSession?.metrics.contract_count ?? 0} />
-            <Metric label={t("Rows")} value={activeSession?.metrics.matched_clause_count ?? 0} />
+            <Metric
+              label={t("Contracts")}
+              value={activeSession?.metrics.contract_count ?? 0}
+              info={t("Number of uploaded contracts in this review session.")}
+            />
+            <Metric
+              label={t("Rows")}
+              value={activeSession?.metrics.matched_clause_count ?? 0}
+              info={t("Number of extracted clause matches across all uploaded contracts.")}
+            />
             <Metric
               label={t("Avg Dev")}
               value={activeSession?.metrics.average_deviation.toFixed(2) ?? "0.00"}
+              info={t("Average deviation score across all extracted rows. Higher means the negotiated text differs more from the preferred playbook position.")}
             />
-            <Metric label={t("Fallbacks")} value={activeSession?.metrics.fallback_rows ?? 0} />
-            <Metric label={t("Red Lines")} value={activeSession?.metrics.red_line_breaches ?? 0} />
+            <Metric
+              label={t("Fallbacks")}
+              value={activeSession?.metrics.fallback_rows ?? 0}
+              info={t("Rows classified as fallback_1 or fallback_2 instead of the preferred position.")}
+            />
+            <Metric
+              label={t("Red Lines")}
+              value={activeSession?.metrics.red_line_breaches ?? 0}
+              info={t("Rows that breached a red-line position in the current playbook.")}
+            />
           </div>
         </div>
 
@@ -476,7 +502,9 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                     <SelectItem value="preferred">{formatEnumLabel("preferred")}</SelectItem>
                     <SelectItem value="fallback_1">{formatEnumLabel("fallback_1")}</SelectItem>
                     <SelectItem value="fallback_2">{formatEnumLabel("fallback_2")}</SelectItem>
-                    <SelectItem value="red_line_breached">{t("Red Line")}</SelectItem>
+                    <SelectItem value="red_line_breached">
+                      {formatEnumLabel("red_line_breached")}
+                    </SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -498,15 +526,30 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
               </Select>
             </div>
             {userRole === "lawyer" ? (
-              <Button
-                type="button"
-                onClick={applyInsights}
-                disabled={!activeSession || rows.length === 0 || Boolean(activeSession.applied_at)}
-                className="max-w-full shrink-0"
-              >
-                <i className="ri-sparkling-line text-base" data-icon="inline-start" />
-                {activeSession?.applied_at ? t("Insights Applied") : t("Generate Suggestions")}
-              </Button>
+              <div className="flex max-w-full shrink-0 items-center gap-2">
+                <Button
+                  type="button"
+                  onClick={applyInsights}
+                  disabled={!activeSession || rows.length === 0 || Boolean(activeSession.applied_at)}
+                  className="max-w-full shrink-0"
+                >
+                  <i className="ri-sparkling-line text-base" data-icon="inline-start" />
+                  {activeSession?.applied_at ? t("Insights Applied") : t("Apply Insights")}
+                </Button>
+                <InfoTooltip
+                  label={t("About Apply Insights")}
+                  content={
+                    activeSession?.applied_at
+                      ? t("These insights were added to negotiation history. Resulting playbook recommendations were sent to the review queue and still require legal approval before any playbook change happens.")
+                      : t("Adds eligible review rows to negotiation history and sends resulting playbook recommendations to the review queue. Low-confidence rows are excluded. This does not change the playbook directly.")
+                  }
+                />
+                {!activeSession?.applied_at && activeSession ? (
+                  <span className="text-xs text-muted-foreground">
+                    {t("Eligible rows")}: {eligibleInsightCount}
+                  </span>
+                ) : null}
+              </div>
             ) : null}
           </div>
 
@@ -555,29 +598,31 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                         selectedRow?.row_id === row.row_id && "bg-accent/70"
                       )}
                     >
-                      <td className="truncate px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 align-top text-muted-foreground">
                         {row.file_name}
                       </td>
-                      <td className="truncate px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 align-top text-muted-foreground">
                         {row.counterparty}
                       </td>
-                      <td className="px-4 py-3">
-                        <p className="truncate font-medium text-foreground">{row.clause_name}</p>
-                        <p className="text-xs text-muted-foreground">
+                      <td className="px-4 py-3 align-top">
+                        <p className="break-words text-pretty font-medium text-foreground">
+                          {row.clause_name}
+                        </p>
+                        <p className="mt-1 break-words text-xs text-muted-foreground">
                           v{row.playbook_version} - {row.clause_type}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <StatusBadge tone={statusTone(row.outcome)}>
                           {formatEnumLabel(row.outcome)}
                         </StatusBadge>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 align-top">
                         <StatusBadge tone={statusTone(row.confidence)}>
                           {formatEnumLabel(row.confidence)}
                         </StatusBadge>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <td className="px-4 py-3 align-top text-muted-foreground">
                         {row.applied ? t("Yes") : t("No")}
                       </td>
                     </tr>
@@ -633,12 +678,34 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number | string }) {
+function Metric({ label, value, info }: { label: string; value: number | string; info?: string }) {
   return (
     <dl className="flex min-h-12 min-w-[112px] items-center justify-between gap-3 rounded-lg border bg-background px-3 py-2">
-      <dt className="truncate text-xs font-medium text-muted-foreground">{label}</dt>
+      <dt className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <span className="truncate">{label}</span>
+        {info ? <InfoTooltip label={`${label} info`} content={info} /> : null}
+      </dt>
       <dd className="text-lg font-semibold text-foreground">{value}</dd>
     </dl>
+  );
+}
+
+function InfoTooltip({ label, content }: { label: string; content: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-border text-[10px] font-semibold text-muted-foreground transition-colors hover:border-livebook hover:text-livebook focus:outline-none focus:ring-2 focus:ring-ring/40"
+          aria-label={label}
+        >
+          i
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6} className="max-w-72 text-pretty leading-relaxed">
+        {content}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

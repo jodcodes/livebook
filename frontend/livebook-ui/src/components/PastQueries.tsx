@@ -22,7 +22,7 @@ interface ChatQueryItem {
 }
 
 export default function PastQueries() {
-  const { t, formatDateTime } = useLocale();
+  const { t, formatDateTime, formatEnumLabel } = useLocale();
   const [queries, setQueries] = useState<ChatQueryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -79,31 +79,31 @@ export default function PastQueries() {
     resolved: {
       icon: "ri-check-line",
       tone: "success" as const,
-      label: t("Resolved"),
+      label: formatEnumLabel("resolved"),
     },
     escalated: {
       icon: "ri-arrow-up-line",
       tone: "warning" as const,
-      label: t("Escalated"),
+      label: formatEnumLabel("escalated"),
     },
     approved: {
       icon: "ri-check-double-line",
       tone: "success" as const,
-      label: t("Approved"),
+      label: formatEnumLabel("approved"),
     },
     rejected: {
       icon: "ri-close-line",
       tone: "danger" as const,
-      label: t("Rejected"),
+      label: formatEnumLabel("rejected"),
     },
   };
 
   const filterLabels: Record<typeof filter, string> = {
     all: t("All"),
-    resolved: t("Resolved"),
-    escalated: t("Escalated"),
-    approved: t("Approved"),
-    rejected: t("Rejected"),
+    resolved: formatEnumLabel("resolved"),
+    escalated: formatEnumLabel("escalated"),
+    approved: formatEnumLabel("approved"),
+    rejected: formatEnumLabel("rejected"),
   };
 
   const formatDate = (value: string) => {
@@ -126,16 +126,16 @@ export default function PastQueries() {
         meta={
           <>
             <StatusBadge tone="success">
-              {resolvedCount} {t("Resolved")}
+              {resolvedCount} {formatEnumLabel("resolved")}
             </StatusBadge>
             <StatusBadge tone="warning">
-              {escalatedCount} {t("Escalated")}
+              {escalatedCount} {formatEnumLabel("escalated")}
             </StatusBadge>
             <StatusBadge tone="success">
-              {approvedCount} {t("Approved")}
+              {approvedCount} {formatEnumLabel("approved")}
             </StatusBadge>
             <StatusBadge tone="danger">
-              {rejectedCount} {t("Rejected")}
+              {rejectedCount} {formatEnumLabel("rejected")}
             </StatusBadge>
           </>
         }
@@ -209,7 +209,7 @@ export default function PastQueries() {
                   <IconFrame tone={config.tone} className="mt-0.5">
                     <i className={config.icon} />
                   </IconFrame>
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <span className="text-xs font-mono font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded">
                         {query.id}
@@ -217,7 +217,7 @@ export default function PastQueries() {
                       <span className="text-xs text-muted-foreground/70">{formatDate(query.created_at)}</span>
                       <StatusBadge tone={config.tone}>{config.label}</StatusBadge>
                     </div>
-                    <h3 className="mb-1 text-sm font-semibold leading-snug text-foreground">
+                    <h3 className="mb-1 break-words text-pretty text-sm font-semibold leading-snug text-foreground">
                       {query.question}
                     </h3>
                   </div>
