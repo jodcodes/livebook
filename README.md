@@ -1,113 +1,84 @@
 # Livebook
 
-Standalone local copy of the Livebook application.
+Livebook is an AI-assisted legal workspace for managing contract playbooks,
+reviewing negotiated language, and keeping approved guidance current across a
+team.
 
-This branch is now designed to run with `Postgres + pgvector` as the backend source of truth. JSON files are no longer the intended runtime persistence layer.
-Runtime filesystem state now lives under `backend/runtime/playbook/current` and `backend/runtime/playbook/history`.
+It combines a Rust backend, a Next.js web app, and a Microsoft Word add-in so
+legal and business users can work from the same source of truth.
 
-## Structure
+## Screenshots
 
-- `backend`: Rust API for playbook ingestion, chat, review queue, tabular review, evolve, and email workflows.
-- `frontend/livebook-ui`: Next.js web application.
-- `frontend/addin`: Microsoft Word task pane add-in.
+![Livebook sign-in](docs/screenshots/sign-in.png)
+![Livebook playbook rules](docs/screenshots/playbook-rules.png)
+![Livebook version history](docs/screenshots/version-history.png)
 
-## Local development
+## What it does
 
-1. Start everything with one command:
+- Chat against approved playbook guidance with clause-aware answers
+- Manage structured contract rules, escalation triggers, and red lines
+- Review tabular contract deviations against the current playbook
+- Track playbook history and lawyer-approved evolution over time
+- Extend the workflow into Microsoft Word through the task pane add-in
 
-```bash
-make dev
-```
+## Stack
 
-That brings up Postgres with `pgvector`, then starts the backend, web app, and Word add-in together using `.env`.
-`make dev` now exposes a single public gateway at `https://localhost:5001`.
+- `backend`: Rust, Axum, Postgres, `pgvector`
+- `frontend/livebook-ui`: Next.js, React, TypeScript
+- `frontend/addin`: Word task pane add-in
 
-Port map:
+## Quick start
 
-| Role | URL | Notes |
-| --- | --- | --- |
-| Public gateway | `https://localhost:5001` | Web UI and Word add-in during `make dev` |
-| Backend | `http://127.0.0.1:5002` | Internal backend bind for `make dev` |
-| Add-in internals | `http://127.0.0.1:3001` | Internal add-in dev server used by `make dev` |
-| Web UI standalone | `http://localhost:3002` | Standalone Next.js dev server |
-| Add-in standalone | `https://localhost:5001/taskpane.html` | Standalone add-in dev entry point |
-
-2. Start Postgres with `pgvector` manually if you want only the database.
-
-Preferred local path:
+1. Copy values from [.env.example](.env.example).
+2. Start Postgres:
 
 ```bash
 docker compose up -d postgres
 ```
 
-Equivalent one-off Docker example:
+3. Start the full dev environment:
 
 ```bash
-docker run --name livebook-postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=livebook \
-  -p 5432:5432 \
-  -d pgvector/pgvector:pg17
+make dev
 ```
 
-3. Copy `.env.example` or `backend/.env.docker.example` values into your shell or local env file.
-
-Required backend variables:
-
-- `DATABASE_URL`
-- `OPENAI_API_KEY`
-
-4. Start the backend directly:
-
-```bash
-cd backend
-cargo run
-```
-
-`make logs` shows the Postgres container logs, and `make down` stops and removes the Dockerized database stack.
-
-Manual paths still work if you want to run each service directly:
-
-```bash
-cd frontend/livebook-ui
-npm install
-npm run dev
-```
-
-```bash
-cd frontend/addin
-npm install
-npm run dev
-```
-
-The separate `make web` and `make addin` targets still exist if you want to start those services independently.
-See `frontend/livebook-ui/README.md` and `frontend/addin/README.md` for the standalone service defaults.
-
-Default local URLs when using `make dev`:
+Default local endpoints:
 
 - Web UI: `https://localhost:5001/`
 - Backend API: `https://localhost:5001/api/question`
 - Word add-in task pane: `https://localhost:5001/taskpane.html`
 
-## Configuration
+## Environment
 
-Key backend settings live in one place now:
+Required variables:
 
-- `DATABASE_URL`: required. Backend startup fails without it.
-- `OPENAI_API_KEY`: required for embeddings and model-backed answers.
-- `OPENAI_MODEL`: answer model for `/question`.
-- `OPENAI_EMBEDDING_MODEL`: embedding model for approved clauses.
-- `OPENAI_EMBEDDING_DIMENSIONS`: must match the configured embedding model.
-- `LIVEBOOK_BACKEND_HOST` / `LIVEBOOK_BACKEND_PORT`: backend bind address. `make dev` runs the backend internally on `127.0.0.1:5002` and exposes it through the `5001` gateway.
-- `ESCALATION_NOTIFICATION_MODE`: `mocked` or `sent`.
+- `DATABASE_URL`
+- `OPENAI_API_KEY`
 
-Local actor placeholders are config-driven:
+Common optional variables:
 
-- Backend defaults use `LIVEBOOK_DEFAULT_*`.
-- Web UI defaults use `NEXT_PUBLIC_LIVEBOOK_DEFAULT_*`.
-
-Frontend proxy/build overrides remain available:
-
+- `OPENAI_MODEL`
+- `OPENAI_EMBEDDING_MODEL`
+- `OPENAI_EMBEDDING_DIMENSIONS`
+- `LIVEBOOK_BACKEND_HOST`
+- `LIVEBOOK_BACKEND_PORT`
+- `ESCALATION_NOTIFICATION_MODE`
 - `LIVEBOOK_BACKEND_URL`
 - `NEXT_PUBLIC_AGENTATION_ENDPOINT`
 - `VITE_LIVEBOOK_API_URL`
+
+## Repository layout
+
+- [backend](backend): API, storage, review, retrieval, and workflow orchestration
+- [frontend/livebook-ui](frontend/livebook-ui): primary browser application
+- [frontend/addin](frontend/addin): Word add-in
+- [docker-compose.yml](docker-compose.yml): local Postgres service
+
+## Open source
+
+This repository is licensed under `AGPL-3.0-only`. If you modify Livebook and
+run it as a network service, you must make the corresponding source code
+available under the same license terms.
+
+See [LICENSE](LICENSE), [CONTRIBUTING.md](CONTRIBUTING.md), and
+[SECURITY.md](SECURITY.md).

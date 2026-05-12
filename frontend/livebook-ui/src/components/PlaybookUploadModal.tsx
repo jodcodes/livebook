@@ -24,20 +24,22 @@ type UploadState = "idle" | "uploading" | "success" | "error";
 type UploadMode = "create" | "update";
 
 const OPPOSITE_PARTY_NAMES = ["Globex GmbH", "Acme Corp", "Initech Ltd"];
-const SIEMENS_LAW_TYPES = [
-  "Smart Infrastructure / Energy",
-  "Digital Industries / Automation",
-  "Data Privacy & Cybersecurity",
+const LAW_DOMAINS = [
+  "Commercial Contracts",
   "Procurement & Supply Chain",
   "Software, IP & Licensing",
+  "Data Privacy & Cybersecurity",
+  "AI Governance",
+  "Termination & Exit",
+  "Liability & Indemnification",
+  "Security & Compliance",
   "Export Control & Sanctions",
-  "Competition & Antitrust",
-  "Mobility & Rail",
-  "Healthcare & MedTech",
-  "Employment & Works Council",
+  "Employment",
   "Corporate Governance & M&A",
-  "ESG & Sustainability",
   "Real Estate & Facilities",
+  "Healthcare & Life Sciences",
+  "Financial Services",
+  "ESG & Sustainability",
   "General Commercial",
 ];
 
@@ -171,7 +173,7 @@ export default function PlaybookUploadModal({
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [playbookName, setPlaybookName] = useState("");
   const [oppositePartyName, setOppositePartyName] = useState(OPPOSITE_PARTY_NAMES[0]);
-  const [lawType, setLawType] = useState(SIEMENS_LAW_TYPES[0]);
+  const [lawType, setLawType] = useState(LAW_DOMAINS[0]);
   const [playbooks, setPlaybooks] = useState<PlaybookSummary[]>([]);
   const [targetPlaybookId, setTargetPlaybookId] = useState("");
   const [draft, setDraft] = useState<UploadResponse | null>(null);
@@ -458,7 +460,7 @@ export default function PlaybookUploadModal({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectGroup>
-                              {SIEMENS_LAW_TYPES.map((type) => (
+                              {LAW_DOMAINS.map((type) => (
                                 <SelectItem key={type} value={type}>
                                   {type}
                                 </SelectItem>

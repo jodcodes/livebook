@@ -14,20 +14,22 @@ import { FilterBar, Notice, PageHeader, Panel, PremiumEmpty, SearchField, Status
 import { cn } from "@/lib/utils";
 
 const API_BASE = "/api/backend";
-const SIEMENS_LAW_TYPES = [
-  "Smart Infrastructure / Energy",
-  "Digital Industries / Automation",
-  "Data Privacy & Cybersecurity",
+const LAW_DOMAINS = [
+  "Commercial Contracts",
   "Procurement & Supply Chain",
   "Software, IP & Licensing",
+  "Data Privacy & Cybersecurity",
+  "AI Governance",
+  "Termination & Exit",
+  "Liability & Indemnification",
+  "Security & Compliance",
   "Export Control & Sanctions",
-  "Competition & Antitrust",
-  "Mobility & Rail",
-  "Healthcare & MedTech",
-  "Employment & Works Council",
+  "Employment",
   "Corporate Governance & M&A",
-  "ESG & Sustainability",
   "Real Estate & Facilities",
+  "Healthcare & Life Sciences",
+  "Financial Services",
+  "ESG & Sustainability",
   "General Commercial",
 ];
 
@@ -630,7 +632,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       <SelectContent>
                         <SelectGroup>
                           <SelectItem value="__unassigned">{t("Not set")}</SelectItem>
-                          {SIEMENS_LAW_TYPES.map((type) => (
+                          {LAW_DOMAINS.map((type) => (
                             <SelectItem key={type} value={type}>
                               {type}
                             </SelectItem>
