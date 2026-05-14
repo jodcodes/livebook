@@ -43,6 +43,8 @@ pub struct QuestionAnswer {
     pub position_used: String,
     pub escalation_required: bool,
     pub next_action: String,
+    #[serde(default)]
+    pub suggested_clause: Option<String>,
     pub query_id: Option<String>,
 }
 
@@ -215,6 +217,7 @@ async fn answer_question(
         )
     })?;
     enforce_escalation_override(&mut structured, &playbook_value, &body.q);
+    populate_suggested_clause(&mut structured, &playbook_value);
     persist_chat_query(&body, &mut structured).await?;
 
     info!("question answered");
@@ -256,6 +259,7 @@ async fn answer_version_compare_question(
         escalation_required: false,
         next_action: "Open Version History for the detailed diff before relying on the change."
             .to_string(),
+        suggested_clause: None,
         query_id: None,
     }))
 }
@@ -348,6 +352,7 @@ fn prompt_injection_guardrail_answer(question: &str) -> Option<QuestionAnswer> {
         position_used: "clarification".to_string(),
         escalation_required: false,
         next_action: "Ask a contract question and, if needed, name the playbook, counterparty, or clause you want to check.".to_string(),
+        suggested_clause: None,
         query_id: None,
     })
 }
@@ -453,6 +458,7 @@ fn clarification_answer(
         position_used: "clarification".to_string(),
         escalation_required: false,
         next_action,
+        suggested_clause: None,
         query_id: None,
     })
 }
@@ -719,9 +725,16 @@ fn normalize_structured_answer(answer: &mut QuestionAnswer) {
     answer.clause_ref = answer.clause_ref.trim().to_string();
     answer.position_used = answer.position_used.trim().to_string();
     answer.next_action = answer.next_action.trim().to_string();
+    answer.suggested_clause = answer
+        .suggested_clause
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
 
     if answer.position_used == "clarification" {
         answer.clause_ref = CLARIFICATION_REF.to_string();
+        answer.suggested_clause = None;
     }
     if answer.answer.starts_with(ESCALATION_PREFIX) {
         answer.escalation_required = true;
@@ -732,6 +745,31 @@ fn normalize_structured_answer(answer: &mut QuestionAnswer) {
             answer.answer
         );
     }
+}
+
+fn populate_suggested_clause(answer: &mut QuestionAnswer, playbook: &Value) {
+    let Some(clause) = find_matched_clause(playbook, &answer.clause_ref) else {
+        answer.suggested_clause = None;
+        return;
+    };
+
+    let field = match answer.position_used.as_str() {
+        "preferred" => "preferred",
+        "fallback_1" => "fallback_1",
+        "fallback_2" => "fallback_2",
+        _ => {
+            answer.suggested_clause = None;
+            return;
+        }
+    };
+
+    answer.suggested_clause = clause
+        .get("positions")
+        .and_then(|positions| positions.get(field))
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string);
 }
 
 fn validate_structured_answer(answer: &QuestionAnswer, playbook: &Value) -> Result<(), String> {
@@ -876,6 +914,7 @@ mod tests {
             position_used: "fallback_1".to_string(),
             escalation_required: false,
             next_action: "Ask Legal.".to_string(),
+            suggested_clause: None,
             query_id: None,
         };
 
@@ -1003,6 +1042,7 @@ mod tests {
             position_used: "preferred".to_string(),
             escalation_required: false,
             next_action: "Ask Legal to approve the clause first.".to_string(),
+            suggested_clause: None,
             query_id: None,
         };
 
@@ -1070,10 +1110,40 @@ mod tests {
             position_used: "fallback_1".to_string(),
             escalation_required: false,
             next_action: "Use fallback 1.".to_string(),
+            suggested_clause: None,
             query_id: None,
         };
 
         let err = validate_structured_answer(&answer, &playbook).unwrap_err();
         assert!(err.contains("did not match"));
+    }
+
+    #[test]
+    fn populate_suggested_clause_uses_matched_playbook_position() {
+        let playbook = json!([{
+            "clause_id": "C01",
+            "name": "Liability",
+            "positions": {
+                "preferred": "Cap liability at fees paid.",
+                "fallback_1": "Cap liability at two times fees paid."
+            },
+            "meta": { "review_status": "approved" }
+        }]);
+        let mut answer = QuestionAnswer {
+            answer: "Use fallback 1.".to_string(),
+            clause_ref: "C01 Liability".to_string(),
+            position_used: "fallback_1".to_string(),
+            escalation_required: false,
+            next_action: "Use fallback 1.".to_string(),
+            suggested_clause: None,
+            query_id: None,
+        };
+
+        populate_suggested_clause(&mut answer, &playbook);
+
+        assert_eq!(
+            answer.suggested_clause.as_deref(),
+            Some("Cap liability at two times fees paid.")
+        );
     }
 }

@@ -39,6 +39,7 @@ interface BackendQuestionAnswer {
   position_used: string;
   escalation_required: boolean;
   next_action: string;
+  suggested_clause?: string | null;
 }
 
 export async function askLivebook(input: {
@@ -66,7 +67,7 @@ export async function askLivebook(input: {
       `Clause: ${answer.clause_ref}`,
       `Position used: ${answer.position_used}`,
     ],
-    suggestedClause: deriveSuggestedClause(answer.answer),
+    suggestedClause: answer.suggested_clause ?? null,
     clauseRef: answer.clause_ref,
     positionUsed: answer.position_used,
     escalationRequired: answer.escalation_required,
@@ -122,28 +123,6 @@ export async function reviewContractText(input: {
   });
 }
 
-export async function applyReviewInsights(input: {
-  sessionId: string;
-  includeLowConfidence: boolean;
-}): Promise<TabularReviewSession> {
-  return requestJson<TabularReviewSession>(
-    `/tabular-review/${encodeURIComponent(input.sessionId)}/apply-insights`,
-    {
-      method: "POST",
-      body: JSON.stringify({ include_low_confidence: input.includeLowConfidence }),
-    },
-  );
-}
-
 export async function loadPlaybookClause(clauseId: string): Promise<PlaybookClause> {
   return requestJson<PlaybookClause>(`/playbook/${encodeURIComponent(clauseId)}`);
-}
-
-function deriveSuggestedClause(answer: string) {
-  const lines = answer
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const clauseLine = lines.find((line) => /clause|wording|language/i.test(line));
-  return clauseLine ?? null;
 }

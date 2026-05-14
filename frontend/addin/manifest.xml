@@ -8,8 +8,12 @@
   <Version>1.0.0.1</Version>
   <ProviderName>Livebook</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="Livebook" />
-  <Description DefaultValue="Livebook task pane for Word." />
+  <DisplayName DefaultValue="Livebook">
+    <Override Locale="de-DE" Value="Livebook" />
+  </DisplayName>
+  <Description DefaultValue="Livebook task pane for Word.">
+    <Override Locale="de-DE" Value="Livebook Aufgabenbereich für Word." />
+  </Description>
   <IconUrl DefaultValue="https://localhost:5001/assets/icon-32.png" />
   <HighResolutionIconUrl DefaultValue="https://localhost:5001/assets/icon-80.png" />
   <SupportUrl DefaultValue="https://localhost:5001/taskpane.html" />
@@ -20,8 +24,8 @@
     <Host Name="Document" />
   </Hosts>
   <Requirements>
-    <Sets DefaultMinVersion="1.1">
-      <Set Name="WordApi" MinVersion="1.1" />
+    <Sets DefaultMinVersion="1.6">
+      <Set Name="WordApi" MinVersion="1.6" />
     </Sets>
   </Requirements>
   <DefaultSettings>
@@ -86,13 +90,23 @@
         <bt:Url id="GetStarted.LearnMoreUrl" DefaultValue="https://localhost:5001/taskpane.html" />
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GetStarted.Title" DefaultValue="Livebook is ready" />
-        <bt:String id="Livebook.GroupLabel" DefaultValue="Livebook" />
-        <bt:String id="Livebook.ButtonLabel" DefaultValue="Open Livebook" />
+        <bt:String id="GetStarted.Title" DefaultValue="Livebook is ready">
+          <bt:Override Locale="de-DE" Value="Livebook ist bereit" />
+        </bt:String>
+        <bt:String id="Livebook.GroupLabel" DefaultValue="Livebook">
+          <bt:Override Locale="de-DE" Value="Livebook" />
+        </bt:String>
+        <bt:String id="Livebook.ButtonLabel" DefaultValue="Open Livebook">
+          <bt:Override Locale="de-DE" Value="Livebook öffnen" />
+        </bt:String>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="GetStarted.Description" DefaultValue="Use Livebook to ask the NDA playbook, verify extracted rules, and propose updates from negotiation insights." />
-        <bt:String id="Livebook.ButtonTooltip" DefaultValue="Open the Livebook assistant for this Word document." />
+        <bt:String id="GetStarted.Description" DefaultValue="Use Livebook to review clauses, ask contract questions, and apply tracked redlines and comments in Word.">
+          <bt:Override Locale="de-DE" Value="Nutze Livebook, um Klauseln zu prüfen, Vertragsfragen zu stellen und getrackte Redlines und Kommentare in Word anzuwenden." />
+        </bt:String>
+        <bt:String id="Livebook.ButtonTooltip" DefaultValue="Open Livebook to review, comment on, and redline this Word document.">
+          <bt:Override Locale="de-DE" Value="Öffne Livebook, um dieses Word-Dokument zu prüfen, zu kommentieren und mit Redlines zu versehen." />
+        </bt:String>
       </bt:LongStrings>
     </Resources>
   </VersionOverrides>

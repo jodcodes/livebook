@@ -29,9 +29,9 @@ Open the browser smoke test at:
 https://localhost:5001/taskpane.html
 ```
 
-The add-in uses the backend for Ask, contract review, and applying review
-insights. Reading from or inserting into the document requires opening the pane
-from Microsoft Word.
+The add-in uses the backend for Ask and contract review. Reading from,
+commenting on, or redlining the document requires opening the pane from
+Microsoft Word.
 
 ## Word Online Sideloading
 
@@ -71,8 +71,9 @@ POST /tabular-review/text
 
 The backend compares it clause-by-clause against the approved structured
 playbook and returns outcomes, evidence, rationale, confidence, red-line count,
-fallback count, and deviation score. Evolve can then apply reviewed insights to
-negotiation history.
+fallback count, and deviation score. The add-in can then find the matching
+clause in Word, add native comments, and apply tracked redlines against the
+document.
 
 ## Configuration
 
