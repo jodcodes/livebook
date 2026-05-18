@@ -3,7 +3,19 @@
 import React, { createContext, useCallback, useContext, useState } from "react";
 
 type UserRole = "business" | "lawyer" | null;
-type View = "chat" | "history" | "playbook" | "versionHistory" | "review" | "tabularReview";
+type View =
+  | "chat"
+  | "history"
+  | "playbook"
+  | "versionHistory"
+  | "review"
+  | "tabularReview"
+  | "contractReview"
+  | "drafting"
+  | "documentChat"
+  | "marketBenchmarks"
+  | "associate"
+  | "proofread";
 
 export interface PastQuery {
   id: string;

@@ -17,6 +17,12 @@ const baseNavItems = [
   { iconClass: "ri-book-open-line", label: "Playbook Rules", view: "playbook" as const },
   { iconClass: "ri-git-branch-line", label: "Version History", view: "versionHistory" as const },
   { iconClass: "ri-table-line", label: "Tabular Review", view: "tabularReview" as const },
+  { iconClass: "ri-file-search-line", label: "Review", view: "contractReview" as const },
+  { iconClass: "ri-quill-pen-line", label: "Draft", view: "drafting" as const },
+  { iconClass: "ri-chat-3-line", label: "Ask", view: "documentChat" as const },
+  { iconClass: "ri-bar-chart-grouped-line", label: "Market", view: "marketBenchmarks" as const },
+  { iconClass: "ri-node-tree", label: "Associate", view: "associate" as const },
+  { iconClass: "ri-check-double-line", label: "Proofread", view: "proofread" as const },
 ];
 
 export default function Sidebar() {

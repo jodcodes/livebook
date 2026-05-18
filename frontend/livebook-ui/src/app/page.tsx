@@ -9,6 +9,7 @@ import PastQueries from "../components/PastQueries";
 import PlaybookRules from "../components/PlaybookRules";
 import PlaybookHistory from "../components/PlaybookHistory";
 import TabularReview from "../components/TabularReview";
+import ProductSuite from "../components/ProductSuite";
 import ReviewPage from "./review/page";
 
 function AppShell() {
@@ -37,6 +38,18 @@ function AppShell() {
         return userRole === "lawyer" ? <ReviewPage /> : <ChatbotDashboard />;
       case "tabularReview":
         return <TabularReview userRole={userRole} />;
+      case "contractReview":
+        return <ProductSuite activeWorkflowId="word-review" />;
+      case "drafting":
+        return <ProductSuite activeWorkflowId="draft-clause" />;
+      case "documentChat":
+        return <ProductSuite activeWorkflowId="document-chat" />;
+      case "marketBenchmarks":
+        return <ProductSuite activeWorkflowId="benchmark-review" />;
+      case "associate":
+        return <ProductSuite activeWorkflowId="associate-project" />;
+      case "proofread":
+        return <ProductSuite activeWorkflowId="proofread" />;
       default:
         return userRole === "business" ? <ChatbotDashboard /> : <LawyerDashboard />;
     }
