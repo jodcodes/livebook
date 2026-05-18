@@ -54,12 +54,16 @@ Common optional variables:
 - `NEXT_PUBLIC_AGENTATION_ENDPOINT`
 - `VITE_LIVEBOOK_API_URL`
 
+For `docker compose`, the internal service URLs are set by Compose itself. In
+practice, you usually only need to provide secrets and model overrides in
+`.env`, especially `OPENAI_API_KEY`.
+
 ## Repository layout
 
 - [backend](backend): API, storage, review, retrieval, and workflow orchestration
 - [frontend/livebook-ui](frontend/livebook-ui): primary browser application
 - [frontend/addin](frontend/addin): Word add-in
-- [docker-compose.yml](docker-compose.yml): local Postgres service
+- [docker-compose.yml](docker-compose.yml): local Docker stack for Postgres, backend, and web UI
 
 ## Open source
 

@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${LIVEBOOK_POSTGRES_PORT:-5432}:5432"
     volumes:
       - livebook-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -17,5 +17,62 @@ services:
       timeout: 5s
       retries: 20
 
+  backend:
+    build:
+      context: ./backend
+    container_name: livebook-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://postgres:postgres@postgres:5432/livebook
+      LIVEBOOK_BACKEND_HOST: 0.0.0.0
+      LIVEBOOK_BACKEND_PORT: 5002
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.5}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_DIMENSIONS: ${OPENAI_EMBEDDING_DIMENSIONS:-1536}
+      ESCALATION_NOTIFICATION_MODE: ${ESCALATION_NOTIFICATION_MODE:-queued}
+      LIVEBOOK_DEFAULT_BUSINESS_USER_ID: ${LIVEBOOK_DEFAULT_BUSINESS_USER_ID:-local-business-user}
+      LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME: ${LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME:-Business User}
+      LIVEBOOK_DEFAULT_BUSINESS_EMAIL: ${LIVEBOOK_DEFAULT_BUSINESS_EMAIL:-business.user@example.com}
+      LIVEBOOK_DEFAULT_BUSINESS_ROLE: ${LIVEBOOK_DEFAULT_BUSINESS_ROLE:-business_user}
+      LIVEBOOK_DEFAULT_LAWYER_USER_ID: ${LIVEBOOK_DEFAULT_LAWYER_USER_ID:-local-legal-counsel}
+      LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME: ${LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME:-Legal Counsel}
+      LIVEBOOK_DEFAULT_LAWYER_EMAIL: ${LIVEBOOK_DEFAULT_LAWYER_EMAIL:-legal.counsel@example.com}
+      LIVEBOOK_DEFAULT_LAWYER_ROLE: ${LIVEBOOK_DEFAULT_LAWYER_ROLE:-lawyer}
+    ports:
+      - "${LIVEBOOK_API_PORT:-5002}:5002"
+    volumes:
+      - livebook-backend-runtime:/app/runtime
+      - livebook-backend-uploads:/app/tabular_review_uploads
+
+  web:
+    build:
+      context: ./frontend/livebook-ui
+    container_name: livebook-ui
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    environment:
+      NODE_ENV: production
+      PORT: 3002
+      LIVEBOOK_BACKEND_URL: http://backend:5002
+      NEXT_PUBLIC_AGENTATION_ENDPOINT: ${NEXT_PUBLIC_AGENTATION_ENDPOINT:-}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_USER_ID: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_USER_ID:-local-business-user}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_DISPLAY_NAME:-Business User}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_EMAIL: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_EMAIL:-business.user@example.com}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_ROLE: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_BUSINESS_ROLE:-business_user}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_USER_ID: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_USER_ID:-local-legal-counsel}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_DISPLAY_NAME:-Legal Counsel}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_EMAIL: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_EMAIL:-legal.counsel@example.com}
+      NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_ROLE: ${NEXT_PUBLIC_LIVEBOOK_DEFAULT_LAWYER_ROLE:-lawyer}
+    ports:
+      - "${LIVEBOOK_WEB_PORT:-3002}:3002"
+
 volumes:
   livebook-postgres-data:
+  livebook-backend-runtime:
+  livebook-backend-uploads:

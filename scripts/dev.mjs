@@ -28,8 +28,12 @@ const uiUrl = `http://localhost:${uiPort}`;
 const addinUrl = `https://127.0.0.1:${addinPort}`;
 let gatewayServer;
 let shuttingDown = false;
+let shutdownPromise;
+let children = [];
 
-const children = [
+await ensurePostgres();
+
+children = [
   run("backend", "cargo", ["run"], backendRoot, {
     LIVEBOOK_BACKEND_HOST: "127.0.0.1",
     LIVEBOOK_BACKEND_PORT: String(backendPort),
@@ -48,8 +52,20 @@ const children = [
 gatewayServer = await startGateway();
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => shutdown(signal));
+  process.on(signal, () => {
+    void shutdown(signal);
+  });
 }
+
+process.on("exit", () => {
+  if (!shuttingDown) {
+    spawn("docker", ["compose", "stop", "postgres"], {
+      cwd: repoRoot,
+      stdio: "ignore",
+      detached: true,
+    }).unref();
+  }
+});
 
 function run(label, command, args, cwd, extraEnv) {
   const child = spawn(command, args, {
@@ -63,16 +79,44 @@ function run(label, command, args, cwd, extraEnv) {
 
   child.on("error", (error) => {
     console.error(`[${label}] failed to start:`, error);
-    shutdown("SIGTERM");
+    void shutdown("SIGTERM");
   });
 
   child.on("exit", (code, signal) => {
     if (shuttingDown || signal) return;
     console.error(`[${label}] exited with code ${code}`);
-    shutdown("SIGTERM");
+    void shutdown("SIGTERM");
   });
 
   return child;
+}
+
+async function ensurePostgres() {
+  console.log("[postgres] starting docker compose service");
+  await runCommand(
+    "docker",
+    ["compose", "up", "-d", "postgres"],
+    repoRoot,
+    "failed to start postgres container",
+  );
+
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    const status = await readCommand(
+      "docker",
+      ["inspect", "--format", "{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}", "livebook-postgres"],
+      repoRoot,
+    );
+
+    if (status === "healthy" || status === "running") {
+      console.log(`[postgres] ready (${status})`);
+      return;
+    }
+
+    await sleep(1_000);
+  }
+
+  throw new Error("postgres did not become ready within 30s");
 }
 
 async function startGateway() {
@@ -224,19 +268,29 @@ function proxyUpgrade(req, clientSocket, head, targetBaseUrl) {
 }
 
 function shutdown(signal) {
-  if (shuttingDown) return;
+  if (shutdownPromise) return shutdownPromise;
   shuttingDown = true;
+  shutdownPromise = (async () => {
+    const stopSignal = signal === "exit" ? "SIGTERM" : signal;
 
-  for (const child of children) {
-    if (!child.killed) child.kill(signal === "exit" ? "SIGTERM" : signal);
-  }
+    const childExitPromises = children.map((child) => stopChild(child, stopSignal));
+    const gatewayClosePromise = gatewayServer
+      ? new Promise((resolve) => gatewayServer.close(resolve))
+      : Promise.resolve();
 
-  if (gatewayServer) {
-    gatewayServer.close();
-  }
+    await Promise.allSettled([...childExitPromises, gatewayClosePromise]);
 
-  if (signal === "SIGINT") process.exit(130);
-  if (signal === "SIGTERM") process.exit(143);
+    try {
+      await runCommand("docker", ["compose", "stop", "postgres"], repoRoot);
+    } catch (error) {
+      console.error("[postgres] failed to stop cleanly:", error.message);
+    }
+
+    if (signal === "SIGINT") process.exit(130);
+    if (signal === "SIGTERM") process.exit(143);
+  })();
+
+  return shutdownPromise;
 }
 
 function readEnvFile(filePath) {
@@ -264,4 +318,78 @@ function readEnvFile(filePath) {
   }
 
   return env;
+}
+
+function stopChild(child, signal) {
+  return new Promise((resolve) => {
+    if (!child || child.killed || child.exitCode !== null || child.signalCode !== null) {
+      resolve();
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (child.exitCode === null && child.signalCode === null) {
+        child.kill("SIGKILL");
+      }
+    }, 5_000);
+
+    child.once("exit", () => {
+      clearTimeout(timer);
+      resolve();
+    });
+
+    child.kill(signal);
+  });
+}
+
+function runCommand(command, args, cwd, failureMessage = `${command} ${args.join(" ")} failed`) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(command, args, {
+      cwd,
+      env: process.env,
+      stdio: "inherit",
+    });
+
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`${failureMessage} (exit ${code ?? "unknown"})`));
+    });
+  });
+}
+
+function readCommand(command, args, cwd) {
+  return new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    const child = spawn(command, args, {
+      cwd,
+      env: process.env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("exit", (code) => {
+      if (code === 0) {
+        resolve(stdout.trim());
+        return;
+      }
+
+      reject(new Error((stderr || stdout || `${command} ${args.join(" ")}`).trim()));
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

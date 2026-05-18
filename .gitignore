@@ -15,6 +15,9 @@ target/
 .vercel/
 .DS_Store
 *.pem
+*.db
+*.sqlite
+*.sqlite3
 *.tsbuildinfo
 next-env.d.ts
 npm-debug.log*
@@ -41,3 +44,5 @@ backend/escalation_queue.json
 email_queue.json
 evolve_suggestions.json
 runtime/
+postgres-data/
+.pgdata/
