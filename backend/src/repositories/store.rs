@@ -224,6 +224,333 @@ pub async fn upsert_tabular_review_rows(session_id: &str, rows: &[Value]) -> Res
     Ok(())
 }
 
+pub async fn seed_clause_library_items(items: &[Value]) -> Result<(), String> {
+    for item in items {
+        let id = item
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "clause library item missing id".to_string())?;
+        let title = item.get("title").and_then(Value::as_str).unwrap_or(id);
+        let clause_type = item
+            .get("clause_type")
+            .and_then(Value::as_str)
+            .unwrap_or("general");
+        let visibility = item
+            .get("visibility")
+            .and_then(Value::as_str)
+            .unwrap_or("shared");
+        let source = item
+            .get("source")
+            .and_then(Value::as_str)
+            .unwrap_or("seed precedent library");
+        let search_text = clause_library_search_text(item);
+        upsert_clause_library_item_with_conflict(
+            id,
+            title,
+            clause_type,
+            visibility,
+            source,
+            &search_text,
+            item,
+            false,
+        )
+        .await?;
+    }
+    Ok(())
+}
+
+pub async fn upsert_clause_library_item(
+    id: &str,
+    title: &str,
+    clause_type: &str,
+    visibility: &str,
+    source: &str,
+    payload: &Value,
+) -> Result<(), String> {
+    let search_text = clause_library_search_text(payload);
+    upsert_clause_library_item_with_conflict(
+        id,
+        title,
+        clause_type,
+        visibility,
+        source,
+        &search_text,
+        payload,
+        true,
+    )
+    .await
+}
+
+pub async fn list_clause_library_items() -> Result<Vec<Value>, String> {
+    list_table_payloads("clause_library_items", "updated_at DESC, title ASC").await
+}
+
+pub async fn upsert_precedent_document(
+    id: &str,
+    title: &str,
+    visibility: &str,
+    payload: &Value,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    client
+        .execute(
+            "INSERT INTO precedent_documents (id, title, visibility, payload, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, NOW(), NOW())
+             ON CONFLICT (id)
+             DO UPDATE SET title = EXCLUDED.title, visibility = EXCLUDED.visibility, payload = EXCLUDED.payload, updated_at = NOW()",
+            &[&id, &title, &visibility, payload],
+        )
+        .await
+        .map_err(|err| format!("failed to upsert precedent document `{id}`: {err}"))?;
+    Ok(())
+}
+
+pub async fn list_precedent_documents() -> Result<Vec<Value>, String> {
+    list_table_payloads("precedent_documents", "updated_at DESC, title ASC").await
+}
+
+pub async fn upsert_word_review_session(
+    session_id: &str,
+    status: &str,
+    payload: &Value,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    client
+        .execute(
+            "INSERT INTO word_review_sessions (session_id, status, payload, created_at, updated_at)
+             VALUES ($1, $2, $3, NOW(), NOW())
+             ON CONFLICT (session_id)
+             DO UPDATE SET status = EXCLUDED.status, payload = EXCLUDED.payload, updated_at = NOW()",
+            &[&session_id, &status, payload],
+        )
+        .await
+        .map_err(|err| format!("failed to upsert word review session `{session_id}`: {err}"))?;
+    Ok(())
+}
+
+pub async fn list_word_review_sessions() -> Result<Vec<Value>, String> {
+    list_table_payloads("word_review_sessions", "updated_at DESC, session_id ASC").await
+}
+
+pub async fn append_word_review_action(
+    session_id: &str,
+    action: &str,
+    actor: &str,
+    payload: &Value,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    client
+        .execute(
+            "INSERT INTO word_review_actions (session_id, action, actor, payload, created_at)
+             VALUES ($1, $2, $3, $4, NOW())",
+            &[&session_id, &action, &actor, payload],
+        )
+        .await
+        .map_err(|err| format!("failed to append word review action `{session_id}`: {err}"))?;
+    Ok(())
+}
+
+pub async fn list_word_review_actions(session_id: Option<&str>) -> Result<Vec<Value>, String> {
+    let client = db()?.client().await?;
+    let rows = if let Some(session_id) = session_id {
+        client
+            .query(
+                "SELECT payload FROM word_review_actions WHERE session_id = $1 ORDER BY created_at DESC",
+                &[&session_id],
+            )
+            .await
+    } else {
+        client
+            .query(
+                "SELECT payload FROM word_review_actions ORDER BY created_at DESC",
+                &[],
+            )
+            .await
+    }
+    .map_err(|err| format!("failed to list word review actions: {err}"))?;
+    Ok(rows.into_iter().map(|row| row.get::<_, Value>(0)).collect())
+}
+
+pub async fn seed_benchmark_standards(items: &[Value]) -> Result<(), String> {
+    for item in items {
+        upsert_benchmark_standard_value(item, false).await?;
+    }
+    Ok(())
+}
+
+pub async fn upsert_benchmark_standard_value(
+    item: &Value,
+    update_existing: bool,
+) -> Result<(), String> {
+    let id = item
+        .get("id")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "benchmark standard missing id".to_string())?;
+    let name = item.get("name").and_then(Value::as_str).unwrap_or(id);
+    let contract_type = item
+        .get("contract_type")
+        .and_then(Value::as_str)
+        .unwrap_or("general commercial agreement");
+    let visibility = item
+        .get("visibility")
+        .and_then(Value::as_str)
+        .unwrap_or("shared");
+    let conflict_clause = if update_existing {
+        "DO UPDATE SET
+           name = EXCLUDED.name,
+           contract_type = EXCLUDED.contract_type,
+           visibility = EXCLUDED.visibility,
+           payload = EXCLUDED.payload,
+           updated_at = NOW()"
+    } else {
+        "DO NOTHING"
+    };
+    let sql = format!(
+        "INSERT INTO benchmark_standards
+         (id, name, contract_type, visibility, payload, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+         ON CONFLICT (id) {conflict_clause}"
+    );
+    let client = db()?.client().await?;
+    client
+        .execute(&sql, &[&id, &name, &contract_type, &visibility, item])
+        .await
+        .map_err(|err| format!("failed to upsert benchmark standard `{id}`: {err}"))?;
+    Ok(())
+}
+
+pub async fn list_benchmark_standards() -> Result<Vec<Value>, String> {
+    list_table_payloads("benchmark_standards", "updated_at DESC, name ASC").await
+}
+
+pub async fn upsert_associate_project(
+    project_id: &str,
+    status: &str,
+    goal: &str,
+    workflow: Option<&str>,
+    payload: &Value,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    client
+        .execute(
+            "INSERT INTO associate_projects (project_id, status, goal, workflow, payload, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+             ON CONFLICT (project_id)
+             DO UPDATE SET status = EXCLUDED.status, goal = EXCLUDED.goal, workflow = EXCLUDED.workflow, payload = EXCLUDED.payload, updated_at = NOW()",
+            &[&project_id, &status, &goal, &workflow, payload],
+        )
+        .await
+        .map_err(|err| format!("failed to upsert associate project `{project_id}`: {err}"))?;
+    Ok(())
+}
+
+pub async fn list_associate_projects() -> Result<Vec<Value>, String> {
+    list_table_payloads("associate_projects", "updated_at DESC, project_id ASC").await
+}
+
+pub async fn append_associate_project_action(
+    project_id: &str,
+    action: &str,
+    payload: &Value,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    client
+        .execute(
+            "INSERT INTO associate_project_actions (project_id, action, payload, created_at)
+             VALUES ($1, $2, $3, NOW())",
+            &[&project_id, &action, payload],
+        )
+        .await
+        .map_err(|err| {
+            format!("failed to append associate project action `{project_id}`: {err}")
+        })?;
+    Ok(())
+}
+
+pub async fn list_associate_project_actions(
+    project_id: Option<&str>,
+) -> Result<Vec<Value>, String> {
+    let client = db()?.client().await?;
+    let rows = if let Some(project_id) = project_id {
+        client
+            .query(
+                "SELECT payload FROM associate_project_actions WHERE project_id = $1 ORDER BY created_at DESC",
+                &[&project_id],
+            )
+            .await
+    } else {
+        client
+            .query(
+                "SELECT payload FROM associate_project_actions ORDER BY created_at DESC",
+                &[],
+            )
+            .await
+    }
+    .map_err(|err| format!("failed to list associate project actions: {err}"))?;
+    Ok(rows.into_iter().map(|row| row.get::<_, Value>(0)).collect())
+}
+
+async fn upsert_clause_library_item_with_conflict(
+    id: &str,
+    title: &str,
+    clause_type: &str,
+    visibility: &str,
+    source: &str,
+    search_text: &str,
+    payload: &Value,
+    update_existing: bool,
+) -> Result<(), String> {
+    let client = db()?.client().await?;
+    let conflict_clause = if update_existing {
+        "DO UPDATE SET
+           title = EXCLUDED.title,
+           clause_type = EXCLUDED.clause_type,
+           visibility = EXCLUDED.visibility,
+           source = EXCLUDED.source,
+           search_text = EXCLUDED.search_text,
+           payload = EXCLUDED.payload,
+           updated_at = NOW()"
+    } else {
+        "DO NOTHING"
+    };
+    let sql = format!(
+        "INSERT INTO clause_library_items
+         (id, title, clause_type, visibility, source, search_text, payload, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+         ON CONFLICT (id) {conflict_clause}"
+    );
+    client
+        .execute(
+            &sql,
+            &[
+                &id,
+                &title,
+                &clause_type,
+                &visibility,
+                &source,
+                &search_text,
+                payload,
+            ],
+        )
+        .await
+        .map_err(|err| format!("failed to upsert clause library item `{id}`: {err}"))?;
+    Ok(())
+}
+
+fn clause_library_search_text(payload: &Value) -> String {
+    [
+        payload.get("title").and_then(Value::as_str),
+        payload.get("clause_type").and_then(Value::as_str),
+        payload.get("text").and_then(Value::as_str),
+        payload.get("source").and_then(Value::as_str),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join(" ")
+    .to_ascii_lowercase()
+}
+
 pub async fn upsert_evolve_suggestion(
     id: &str,
     clause_id: Option<&str>,
@@ -464,10 +791,7 @@ async fn sync_playbooks_and_clauses(current: &Value) -> Result<(), String> {
             .get("party_name")
             .and_then(Value::as_str)
             .unwrap_or("");
-        let law_type = sample
-            .get("law_type")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let law_type = sample.get("law_type").and_then(Value::as_str).unwrap_or("");
         let payload = Value::Array(clauses.clone());
         let clause_count = clauses.len() as i32;
 

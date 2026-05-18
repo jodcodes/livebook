@@ -150,6 +150,77 @@ CREATE TABLE IF NOT EXISTS tabular_review_rows (
     payload JSONB NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS clause_library_items (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    clause_type TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    source TEXT NOT NULL,
+    search_text TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS clause_library_items_clause_type_idx ON clause_library_items(clause_type);
+CREATE INDEX IF NOT EXISTS clause_library_items_visibility_idx ON clause_library_items(visibility);
+
+CREATE TABLE IF NOT EXISTS precedent_documents (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS word_review_sessions (
+    session_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS word_review_actions (
+    id BIGSERIAL PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES word_review_sessions(session_id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS benchmark_standards (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    contract_type TEXT NOT NULL,
+    visibility TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS benchmark_standards_contract_type_idx ON benchmark_standards(contract_type);
+
+CREATE TABLE IF NOT EXISTS associate_projects (
+    project_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    workflow TEXT,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS associate_project_actions (
+    id BIGSERIAL PRIMARY KEY,
+    project_id TEXT NOT NULL REFERENCES associate_projects(project_id) ON DELETE CASCADE,
+    action TEXT NOT NULL,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS evolve_suggestions (
     id TEXT PRIMARY KEY,
     clause_id TEXT,

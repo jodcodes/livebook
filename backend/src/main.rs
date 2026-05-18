@@ -19,8 +19,14 @@ use routes::{
     get_email_queue, get_escalations, get_evolve, get_playbook, get_playbook_clause,
     get_playbook_history, get_playbook_review, get_playbook_version_detail, get_playbook_versions,
     get_playbooks, get_tabular_review, get_tabular_reviews, ingest_email, patch_playbook,
-    patch_playbook_clause, post_playbook, post_question, post_tabular_review,
-    post_tabular_review_text, reject_email_queue, reject_evolve, resolve_escalation,
+    patch_playbook_clause, post_associate_project, post_associate_project_actions,
+    post_associate_project_list, post_benchmark_review, post_benchmark_standard_list,
+    post_benchmark_standard_save, post_clause_library_list, post_clause_library_save,
+    post_clause_library_search, post_document_chat, post_draft_clause, post_playbook,
+    post_precedent_list, post_precedent_upload, post_precedent_upload_file, post_proofread,
+    post_question, post_tabular_review, post_tabular_review_text, post_word_review,
+    post_word_review_action, post_word_review_actions, post_word_review_bulk_apply,
+    post_word_review_list, reject_email_queue, reject_evolve, resolve_escalation,
     restore_clause_version, run_email_processing_loop, run_evolve_analysis,
 };
 use std::net::SocketAddr;
@@ -109,6 +115,56 @@ async fn main() {
             "/tabular-review/{session_id}/apply-insights",
             post(apply_tabular_review_insights),
         )
+        .route("/product/word-review", post(post_word_review))
+        .route("/product/word-review/list", post(post_word_review_list))
+        .route(
+            "/product/word-review/actions",
+            post(post_word_review_actions),
+        )
+        .route("/product/word-review/action", post(post_word_review_action))
+        .route(
+            "/product/word-review/bulk-apply",
+            post(post_word_review_bulk_apply),
+        )
+        .route("/product/draft-clause", post(post_draft_clause))
+        .route(
+            "/product/clause-library/search",
+            post(post_clause_library_search),
+        )
+        .route(
+            "/product/clause-library/save",
+            post(post_clause_library_save),
+        )
+        .route(
+            "/product/clause-library/list",
+            post(post_clause_library_list),
+        )
+        .route("/product/precedents/upload", post(post_precedent_upload))
+        .route(
+            "/product/precedents/upload-file",
+            post(post_precedent_upload_file),
+        )
+        .route("/product/precedents/list", post(post_precedent_list))
+        .route("/product/document-chat", post(post_document_chat))
+        .route("/product/benchmark-review", post(post_benchmark_review))
+        .route(
+            "/product/benchmark-standards/save",
+            post(post_benchmark_standard_save),
+        )
+        .route(
+            "/product/benchmark-standards/list",
+            post(post_benchmark_standard_list),
+        )
+        .route("/product/associate-project", post(post_associate_project))
+        .route(
+            "/product/associate-project/list",
+            post(post_associate_project_list),
+        )
+        .route(
+            "/product/associate-project/actions",
+            post(post_associate_project_actions),
+        )
+        .route("/product/proofread", post(post_proofread))
         .route("/escalations", get(get_escalations).post(create_escalation))
         .route("/escalations/{id}/resolve", post(resolve_escalation))
         .route("/escalations/{id}/decline", post(decline_escalation))

@@ -3,6 +3,7 @@ pub mod email;
 pub mod escalation;
 pub mod evolve;
 pub mod playbook;
+pub mod product_features;
 pub mod question;
 pub mod tabular_review;
 
@@ -18,6 +19,14 @@ pub use playbook::{
     explain_version_compare, get_clause_history, get_playbook, get_playbook_clause,
     get_playbook_history, get_playbook_review, get_playbook_version_detail, get_playbook_versions,
     get_playbooks, patch_playbook, patch_playbook_clause, post_playbook, restore_clause_version,
+};
+pub use product_features::{
+    post_associate_project, post_associate_project_actions, post_associate_project_list,
+    post_benchmark_review, post_benchmark_standard_list, post_benchmark_standard_save,
+    post_clause_library_list, post_clause_library_save, post_clause_library_search,
+    post_document_chat, post_draft_clause, post_precedent_list, post_precedent_upload,
+    post_precedent_upload_file, post_proofread, post_word_review, post_word_review_action,
+    post_word_review_actions, post_word_review_bulk_apply, post_word_review_list,
 };
 pub use question::{get_question, post_question};
 pub use tabular_review::{
