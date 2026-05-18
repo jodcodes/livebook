@@ -73,6 +73,27 @@ pub async fn append_audit_record(
     Ok(())
 }
 
+pub async fn list_audit_records(entity_type: Option<&str>) -> Result<Vec<Value>, String> {
+    let client = db()?.client().await?;
+    let rows = if let Some(entity_type) = entity_type {
+        client
+            .query(
+                "SELECT payload FROM audit_records WHERE entity_type = $1 ORDER BY created_at DESC, id DESC LIMIT 100",
+                &[&entity_type],
+            )
+            .await
+    } else {
+        client
+            .query(
+                "SELECT payload FROM audit_records ORDER BY created_at DESC, id DESC LIMIT 100",
+                &[],
+            )
+            .await
+    }
+    .map_err(|err| format!("failed to list audit records: {err}"))?;
+    Ok(rows.into_iter().map(|row| row.get::<_, Value>(0)).collect())
+}
+
 pub async fn upsert_chat_query(
     id: &str,
     session_id: &str,
@@ -369,58 +390,6 @@ pub async fn list_word_review_actions(session_id: Option<&str>) -> Result<Vec<Va
     }
     .map_err(|err| format!("failed to list word review actions: {err}"))?;
     Ok(rows.into_iter().map(|row| row.get::<_, Value>(0)).collect())
-}
-
-pub async fn seed_benchmark_standards(items: &[Value]) -> Result<(), String> {
-    for item in items {
-        upsert_benchmark_standard_value(item, false).await?;
-    }
-    Ok(())
-}
-
-pub async fn upsert_benchmark_standard_value(
-    item: &Value,
-    update_existing: bool,
-) -> Result<(), String> {
-    let id = item
-        .get("id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "benchmark standard missing id".to_string())?;
-    let name = item.get("name").and_then(Value::as_str).unwrap_or(id);
-    let contract_type = item
-        .get("contract_type")
-        .and_then(Value::as_str)
-        .unwrap_or("general commercial agreement");
-    let visibility = item
-        .get("visibility")
-        .and_then(Value::as_str)
-        .unwrap_or("shared");
-    let conflict_clause = if update_existing {
-        "DO UPDATE SET
-           name = EXCLUDED.name,
-           contract_type = EXCLUDED.contract_type,
-           visibility = EXCLUDED.visibility,
-           payload = EXCLUDED.payload,
-           updated_at = NOW()"
-    } else {
-        "DO NOTHING"
-    };
-    let sql = format!(
-        "INSERT INTO benchmark_standards
-         (id, name, contract_type, visibility, payload, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-         ON CONFLICT (id) {conflict_clause}"
-    );
-    let client = db()?.client().await?;
-    client
-        .execute(&sql, &[&id, &name, &contract_type, &visibility, item])
-        .await
-        .map_err(|err| format!("failed to upsert benchmark standard `{id}`: {err}"))?;
-    Ok(())
-}
-
-pub async fn list_benchmark_standards() -> Result<Vec<Value>, String> {
-    list_table_payloads("benchmark_standards", "updated_at DESC, name ASC").await
 }
 
 pub async fn upsert_associate_project(

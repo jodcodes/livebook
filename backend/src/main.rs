@@ -20,14 +20,14 @@ use routes::{
     get_playbook_history, get_playbook_review, get_playbook_version_detail, get_playbook_versions,
     get_playbooks, get_tabular_review, get_tabular_reviews, ingest_email, patch_playbook,
     patch_playbook_clause, post_associate_project, post_associate_project_actions,
-    post_associate_project_list, post_benchmark_review, post_benchmark_standard_list,
-    post_benchmark_standard_save, post_clause_library_list, post_clause_library_save,
+    post_associate_project_list, post_clause_library_list, post_clause_library_save,
     post_clause_library_search, post_document_chat, post_draft_clause, post_playbook,
     post_precedent_list, post_precedent_upload, post_precedent_upload_file, post_proofread,
     post_question, post_tabular_review, post_tabular_review_text, post_word_review,
     post_word_review_action, post_word_review_actions, post_word_review_bulk_apply,
-    post_word_review_list, reject_email_queue, reject_evolve, resolve_escalation,
-    restore_clause_version, run_email_processing_loop, run_evolve_analysis,
+    post_word_review_list, post_workspace_activity_append, post_workspace_activity_list,
+    post_workspace_settings_get, post_workspace_settings_save, reject_email_queue, reject_evolve,
+    resolve_escalation, restore_clause_version, run_email_processing_loop, run_evolve_analysis,
 };
 use std::net::SocketAddr;
 use tracing::info;
@@ -146,15 +146,6 @@ async fn main() {
         )
         .route("/product/precedents/list", post(post_precedent_list))
         .route("/product/document-chat", post(post_document_chat))
-        .route("/product/benchmark-review", post(post_benchmark_review))
-        .route(
-            "/product/benchmark-standards/save",
-            post(post_benchmark_standard_save),
-        )
-        .route(
-            "/product/benchmark-standards/list",
-            post(post_benchmark_standard_list),
-        )
         .route("/product/associate-project", post(post_associate_project))
         .route(
             "/product/associate-project/list",
@@ -165,6 +156,22 @@ async fn main() {
             post(post_associate_project_actions),
         )
         .route("/product/proofread", post(post_proofread))
+        .route(
+            "/product/workspace-settings/get",
+            post(post_workspace_settings_get),
+        )
+        .route(
+            "/product/workspace-settings/save",
+            post(post_workspace_settings_save),
+        )
+        .route(
+            "/product/workspace-activity/list",
+            post(post_workspace_activity_list),
+        )
+        .route(
+            "/product/workspace-activity/append",
+            post(post_workspace_activity_append),
+        )
         .route("/escalations", get(get_escalations).post(create_escalation))
         .route("/escalations/{id}/resolve", post(resolve_escalation))
         .route("/escalations/{id}/decline", post(decline_escalation))

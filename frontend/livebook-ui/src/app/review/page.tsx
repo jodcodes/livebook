@@ -137,6 +137,16 @@ async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
+async function productApiJson<T>(workflow: string, body: Record<string, unknown>): Promise<T> {
+  const response = await fetch(`/api/product/${workflow}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json();
+}
+
 function clauseDraft(clause: ReviewClause) {
   return {
     name: clause.name ?? "",
@@ -494,6 +504,7 @@ export default function ReviewPage() {
           body: JSON.stringify({ approved_by: "lawyer" }),
         });
       }
+      await recordQueueWriteback("Approved", `Clause ${clause.clause_id} approved from Legal Queue.`);
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -514,6 +525,7 @@ export default function ReviewPage() {
           body: JSON.stringify({ declined_by: "lawyer" }),
         });
       }
+      await recordQueueWriteback("Declined", `Clause ${clauseId} declined from Legal Queue.`);
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -530,6 +542,7 @@ export default function ReviewPage() {
           reviewed_by: reviewer,
         }),
       });
+      await recordQueueWriteback("Resolved", `Escalation ${id} resolved from Legal Queue.`);
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -546,10 +559,24 @@ export default function ReviewPage() {
           reviewed_by: reviewer,
         }),
       });
+      await recordQueueWriteback("Declined", `Escalation ${id} declined from Legal Queue.`);
       await refresh();
       setDetailOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function recordQueueWriteback(label: string, detail: string) {
+    try {
+      await productApiJson("workspace-activity-append", {
+        label,
+        detail,
+        workflow: "legal_queue",
+        actor: "Legal Reviewer",
+      });
+    } catch {
+      // Queue source writeback already completed; activity sync is best-effort.
     }
   }
 

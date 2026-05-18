@@ -191,18 +191,6 @@ CREATE TABLE IF NOT EXISTS word_review_actions (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS benchmark_standards (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    contract_type TEXT NOT NULL,
-    visibility TEXT NOT NULL,
-    payload JSONB NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS benchmark_standards_contract_type_idx ON benchmark_standards(contract_type);
-
 CREATE TABLE IF NOT EXISTS associate_projects (
     project_id TEXT PRIMARY KEY,
     status TEXT NOT NULL,

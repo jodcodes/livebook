@@ -660,17 +660,36 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
   const [activityHydrated, setActivityHydrated] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = window.localStorage.getItem(ACTIVITY_STORAGE_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw) as Activity[];
-        setActivity(Array.isArray(saved) ? saved.slice(0, 12) : []);
+    let cancelled = false;
+    async function loadActivity() {
+      try {
+        const raw = window.localStorage.getItem(ACTIVITY_STORAGE_KEY);
+        let localActivity: Activity[] = [];
+        if (raw) {
+          const saved = JSON.parse(raw) as Activity[];
+          localActivity = Array.isArray(saved) ? saved.slice(0, 12) : [];
+        }
+        const response = await fetch("/api/product/workspace-activity-list", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) {
+          if (!cancelled) setActivity(localActivity);
+          return;
+        }
+        const data = (await response.json()) as { activity?: Activity[] };
+        if (!cancelled) setActivity((data.activity?.length ? data.activity : localActivity).slice(0, 12));
+      } catch {
+        window.localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+      } finally {
+        if (!cancelled) setActivityHydrated(true);
       }
-    } catch {
-      window.localStorage.removeItem(ACTIVITY_STORAGE_KEY);
-    } finally {
-      setActivityHydrated(true);
     }
+    void loadActivity();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -726,14 +745,25 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
   };
 
   const recordActivity = (label: string, detail: string) => {
+    const item = {
+      id: `${Date.now()}-${label}`,
+      label,
+      detail,
+    };
     setActivity((current) => [
-      {
-        id: `${Date.now()}-${label}`,
-        label,
-        detail,
-      },
+      item,
       ...current,
     ].slice(0, 12));
+    void fetch("/api/product/workspace-activity-append", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        label,
+        detail,
+        workflow: activeWorkflowId ?? "product-suite",
+        actor: "Livebook User",
+      }),
+    }).catch(() => undefined);
   };
 
   const postProductAction = async (workflow: string, payload: Record<string, unknown>) => {

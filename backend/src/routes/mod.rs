@@ -22,11 +22,12 @@ pub use playbook::{
 };
 pub use product_features::{
     post_associate_project, post_associate_project_actions, post_associate_project_list,
-    post_benchmark_review, post_benchmark_standard_list, post_benchmark_standard_save,
     post_clause_library_list, post_clause_library_save, post_clause_library_search,
     post_document_chat, post_draft_clause, post_precedent_list, post_precedent_upload,
     post_precedent_upload_file, post_proofread, post_word_review, post_word_review_action,
     post_word_review_actions, post_word_review_bulk_apply, post_word_review_list,
+    post_workspace_activity_append, post_workspace_activity_list, post_workspace_settings_get,
+    post_workspace_settings_save,
 };
 pub use question::{get_question, post_question};
 pub use tabular_review::{

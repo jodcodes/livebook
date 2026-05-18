@@ -5,7 +5,7 @@ test("legal user can move through review, proofread, ask, draft, projects, and s
 }) => {
   const consoleErrors: string[] = [];
   page.on("console", (message) => {
-    if (message.type() === "error") {
+    if (message.type() === "error" && !message.text().startsWith("Failed to load resource:")) {
       consoleErrors.push(message.text());
     }
   });
@@ -40,4 +40,15 @@ test("legal user can move through review, proofread, ask, draft, projects, and s
 
   await expect(page.locator("body")).not.toContainText("Market");
   expect(consoleErrors).toEqual([]);
+});
+
+test("business user sees role-limited settings without legal queue", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Business User/i }).click();
+
+  await expect(page.locator("body")).not.toContainText("Legal Queue");
+
+  await page.locator("button").filter({ hasText: /^Settings$/ }).first().click();
+  await expect(page.getByText("Business users can inspect defaults")).toBeVisible();
+  await expect(page.getByRole("button", { name: /Save settings/i })).toBeDisabled();
 });

@@ -20,6 +20,10 @@ const workflowEndpoints: Record<string, string> = {
   "associate-project-list": "/product/associate-project/list",
   "associate-project-actions": "/product/associate-project/actions",
   proofread: "/product/proofread",
+  "workspace-settings-get": "/product/workspace-settings/get",
+  "workspace-settings-save": "/product/workspace-settings/save",
+  "workspace-activity-list": "/product/workspace-activity/list",
+  "workspace-activity-append": "/product/workspace-activity/append",
 };
 
 export async function POST(

@@ -705,308 +705,6 @@ pub fn answer_document_chat(request: DocumentChatRequest) -> DocumentChatAnswer 
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkRequest {
-    pub document_text: String,
-    pub contract_type: Option<String>,
-    pub jurisdiction: Option<String>,
-    pub industry: Option<String>,
-    pub deal_type: Option<String>,
-    pub party_position: Option<String>,
-    pub standards_available: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkAlternative {
-    pub label: String,
-    pub prevalence: u8,
-    pub text: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkFinding {
-    pub id: String,
-    pub deal_point: String,
-    pub status: String,
-    pub explanation: String,
-    pub prevalence: Option<u8>,
-    pub suggested_fix: Option<String>,
-    pub alternatives: Vec<BenchmarkAlternative>,
-    pub source_standard: String,
-    pub confidence: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkReview {
-    pub matched_contract_type: Option<String>,
-    pub filters: Vec<String>,
-    pub findings: Vec<BenchmarkFinding>,
-    pub unavailable_reason: Option<String>,
-    pub dataset_version: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkStandardRecord {
-    pub id: String,
-    pub name: String,
-    pub contract_type: String,
-    pub visibility: String,
-    pub liability_unlimited_prevalence: u8,
-    pub liability_fix: String,
-    pub liability_alternatives: Vec<BenchmarkAlternative>,
-    pub audit_right_prevalence: u8,
-    pub audit_fix: String,
-    pub audit_alternatives: Vec<BenchmarkAlternative>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BenchmarkStandardSaveRequest {
-    pub name: String,
-    pub contract_type: String,
-    pub visibility: String,
-    pub liability_fix: String,
-    pub audit_fix: String,
-}
-
-#[allow(dead_code)]
-pub fn run_benchmark_review(request: BenchmarkRequest) -> BenchmarkReview {
-    run_benchmark_review_with_records(request, &[])
-}
-
-pub fn run_benchmark_review_with_records(
-    request: BenchmarkRequest,
-    records: &[BenchmarkStandardRecord],
-) -> BenchmarkReview {
-    if !request.standards_available {
-        return BenchmarkReview {
-            matched_contract_type: None,
-            filters: active_filters(&request),
-            findings: Vec::new(),
-            unavailable_reason: Some(
-                "No benchmark standard is available for this document context.".into(),
-            ),
-            dataset_version: "seed-market-v1".into(),
-        };
-    }
-
-    let matched_contract_type = request
-        .contract_type
-        .clone()
-        .or_else(|| request.deal_type.clone())
-        .or_else(|| infer_contract_type(&request.document_text));
-    let standard = records
-        .iter()
-        .find(|record| {
-            matched_contract_type
-                .as_deref()
-                .is_some_and(|contract_type| {
-                    contract_type
-                        .to_ascii_lowercase()
-                        .contains(&record.contract_type.to_ascii_lowercase())
-                        || record
-                            .contract_type
-                            .to_ascii_lowercase()
-                            .contains(&contract_type.to_ascii_lowercase())
-                })
-        })
-        .cloned()
-        .map(BenchmarkStandard::from)
-        .unwrap_or_else(|| {
-            benchmark_standard_for(matched_contract_type.as_deref().unwrap_or_default())
-        });
-    let lower = request.document_text.to_ascii_lowercase();
-    let mut findings = Vec::new();
-
-    if lower.contains("unlimited liability") {
-        findings.push(BenchmarkFinding {
-            id: "benchmark-liability-cap".into(),
-            deal_point: "Liability cap".into(),
-            status: "off-market".into(),
-            explanation: format!(
-                "Unlimited liability is outside {} for this deal context; capped liability is the benchmark default.",
-                standard.name
-            ),
-            prevalence: Some(standard.liability_unlimited_prevalence),
-            suggested_fix: Some(standard.liability_fix.clone()),
-            alternatives: standard.liability_alternatives.clone(),
-            source_standard: standard.name.clone(),
-            confidence: "high".into(),
-        });
-    }
-    if lower.contains("no audit right") || !lower.contains("audit") {
-        findings.push(BenchmarkFinding {
-            id: "benchmark-audit-right".into(),
-            deal_point: "Audit rights".into(),
-            status: "missing".into(),
-            explanation: format!(
-                "{} expects an audit or inspection right for this contract profile.",
-                standard.name
-            ),
-            prevalence: Some(standard.audit_right_prevalence),
-            suggested_fix: Some(standard.audit_fix.clone()),
-            alternatives: standard.audit_alternatives.clone(),
-            source_standard: standard.name.clone(),
-            confidence: "medium".into(),
-        });
-    }
-    if findings.is_empty() {
-        findings.push(BenchmarkFinding {
-            id: "benchmark-standard".into(),
-            deal_point: "General terms".into(),
-            status: "standard".into(),
-            explanation: format!("No obvious deviation from {} was detected.", standard.name),
-            prevalence: Some(64),
-            suggested_fix: None,
-            alternatives: Vec::new(),
-            source_standard: standard.name.clone(),
-            confidence: "medium".into(),
-        });
-    }
-
-    BenchmarkReview {
-        matched_contract_type,
-        filters: active_filters(&request),
-        findings,
-        unavailable_reason: None,
-        dataset_version: "seed-market-v1".into(),
-    }
-}
-
-#[derive(Debug, Clone)]
-struct BenchmarkStandard {
-    name: String,
-    liability_unlimited_prevalence: u8,
-    liability_fix: String,
-    liability_alternatives: Vec<BenchmarkAlternative>,
-    audit_right_prevalence: u8,
-    audit_fix: String,
-    audit_alternatives: Vec<BenchmarkAlternative>,
-}
-
-impl From<BenchmarkStandardRecord> for BenchmarkStandard {
-    fn from(record: BenchmarkStandardRecord) -> Self {
-        Self {
-            name: record.name,
-            liability_unlimited_prevalence: record.liability_unlimited_prevalence,
-            liability_fix: record.liability_fix,
-            liability_alternatives: record.liability_alternatives,
-            audit_right_prevalence: record.audit_right_prevalence,
-            audit_fix: record.audit_fix,
-            audit_alternatives: record.audit_alternatives,
-        }
-    }
-}
-
-fn benchmark_standard_for(contract_type: &str) -> BenchmarkStandard {
-    let normalized = contract_type.to_ascii_lowercase();
-    if normalized.contains("lease") {
-        return BenchmarkStandard {
-            name: "Commercial lease tenant standard".into(),
-            liability_unlimited_prevalence: 12,
-            liability_fix: "Replace unlimited liability with a mutual cap at 12 months of rent, with customary carveouts for fraud, intentional misconduct, confidentiality, and payment obligations.".into(),
-            liability_alternatives: vec![
-                benchmark_alt("12 months rent cap", 47, "Liability is capped at rent paid or payable in the twelve months preceding the claim."),
-                benchmark_alt("Insurance proceeds cap", 21, "Liability is capped at available insurance proceeds for covered claims."),
-                benchmark_alt("Uncapped landlord remedies", 12, "Landlord remedies are uncapped for payment defaults and intentional misconduct only."),
-            ],
-            audit_right_prevalence: 68,
-            audit_fix: "Add a tenant inspection and audit right on reasonable notice, subject to confidentiality and business-hours limits.".into(),
-            audit_alternatives: vec![
-                benchmark_alt("Annual audit", 38, "Tenant may audit relevant records once per year on reasonable notice."),
-                benchmark_alt("Cause-based audit", 26, "Tenant may audit when it reasonably believes charges are incorrect."),
-                benchmark_alt("No audit", 6, "No express audit right is included."),
-            ],
-        };
-    }
-
-    BenchmarkStandard {
-        name: "Software MSA customer standard".into(),
-        liability_unlimited_prevalence: 18,
-        liability_fix: "Add a liability cap tied to fees paid in the prior 12 months, with carveouts for IP indemnity, confidentiality, data security, and payment obligations.".into(),
-        liability_alternatives: vec![
-            benchmark_alt("12 months fees cap", 52, "Liability is capped at fees paid in the prior twelve months."),
-            benchmark_alt("2x fees cap", 23, "Liability is capped at two times fees paid or payable."),
-            benchmark_alt("Super-cap for data", 19, "Data security claims are subject to a separate higher cap."),
-        ],
-        audit_right_prevalence: 74,
-        audit_fix: "Add a reasonable audit right with confidentiality safeguards and no more than annual exercise absent cause.".into(),
-        audit_alternatives: vec![
-            benchmark_alt("Annual compliance audit", 41, "Customer may audit compliance annually on reasonable notice."),
-            benchmark_alt("Security report substitute", 29, "Supplier may provide SOC or equivalent reports instead of on-site audit."),
-            benchmark_alt("Cause-based audit", 22, "Customer may audit after a suspected breach or material non-compliance."),
-        ],
-    }
-}
-
-fn seeded_benchmark_standard_records() -> Vec<BenchmarkStandardRecord> {
-    [
-        ("benchmark-commercial-lease-tenant", "commercial lease"),
-        (
-            "benchmark-software-msa-customer",
-            "master services agreement",
-        ),
-    ]
-    .into_iter()
-    .map(|(id, contract_type)| {
-        let standard = benchmark_standard_for(contract_type);
-        BenchmarkStandardRecord {
-            id: id.into(),
-            name: standard.name,
-            contract_type: contract_type.into(),
-            visibility: "shared".into(),
-            liability_unlimited_prevalence: standard.liability_unlimited_prevalence,
-            liability_fix: standard.liability_fix,
-            liability_alternatives: standard.liability_alternatives,
-            audit_right_prevalence: standard.audit_right_prevalence,
-            audit_fix: standard.audit_fix,
-            audit_alternatives: standard.audit_alternatives,
-        }
-    })
-    .collect()
-}
-
-pub fn save_benchmark_standard(
-    request: BenchmarkStandardSaveRequest,
-) -> Result<BenchmarkStandardRecord, String> {
-    let name = request.name.trim();
-    let contract_type = request.contract_type.trim();
-    if name.is_empty() || contract_type.is_empty() {
-        return Err("Benchmark standard name and contract type are required.".into());
-    }
-    Ok(BenchmarkStandardRecord {
-        id: stable_id("benchmark-standard", &format!("{name}:{contract_type}")),
-        name: name.into(),
-        contract_type: contract_type.into(),
-        visibility: if request.visibility.trim().is_empty() {
-            "team".into()
-        } else {
-            request.visibility.trim().into()
-        },
-        liability_unlimited_prevalence: 15,
-        liability_fix: request.liability_fix.trim().into(),
-        liability_alternatives: vec![benchmark_alt(
-            "Custom liability fix",
-            100,
-            request.liability_fix.trim(),
-        )],
-        audit_right_prevalence: 70,
-        audit_fix: request.audit_fix.trim().into(),
-        audit_alternatives: vec![benchmark_alt(
-            "Custom audit fix",
-            100,
-            request.audit_fix.trim(),
-        )],
-    })
-}
-
-fn benchmark_alt(label: &str, prevalence: u8, text: &str) -> BenchmarkAlternative {
-    BenchmarkAlternative {
-        label: label.into(),
-        prevalence,
-        text: text.into(),
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DocumentInput {
     pub name: String,
     pub text: String,
@@ -1216,6 +914,33 @@ pub struct ProofreadFinding {
     pub message: String,
     pub suggestion: Option<String>,
     pub confidence: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkspaceSettings {
+    pub tone: String,
+    pub style: String,
+    pub source_policy: String,
+    pub updated_by: String,
+}
+
+impl Default for WorkspaceSettings {
+    fn default() -> Self {
+        Self {
+            tone: "Plain English, concise, business-friendly.".into(),
+            style: "Prefer balanced language unless a party position is selected.".into(),
+            source_policy: "User precedents are reusable drafting context only; approved playbook clauses remain the policy source.".into(),
+            updated_by: "system".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct WorkspaceActivityRequest {
+    pub label: String,
+    pub detail: String,
+    pub workflow: Option<String>,
+    pub actor: Option<String>,
 }
 
 pub fn run_proofread(document_text: &str) -> Vec<ProofreadFinding> {
@@ -1499,22 +1224,6 @@ pub async fn post_document_chat(
     Json(answer_document_chat(request))
 }
 
-pub async fn post_benchmark_review(Json(request): Json<BenchmarkRequest>) -> Json<BenchmarkReview> {
-    let _ = seed_persisted_benchmark_standards().await;
-    let records = store::list_benchmark_standards()
-        .await
-        .ok()
-        .and_then(|values| {
-            values
-                .into_iter()
-                .map(serde_json::from_value)
-                .collect::<Result<Vec<BenchmarkStandardRecord>, _>>()
-                .ok()
-        })
-        .unwrap_or_else(seeded_benchmark_standard_records);
-    Json(run_benchmark_review_with_records(request, &records))
-}
-
 pub async fn post_associate_project(
     Json(request): Json<AgentProjectRequest>,
 ) -> Json<AgentProject> {
@@ -1530,33 +1239,6 @@ pub async fn post_associate_project(
     .await;
     let _ = store::append_associate_project_action(&project.project_id, "planned", &payload).await;
     Json(project)
-}
-
-pub async fn post_benchmark_standard_save(
-    Json(request): Json<BenchmarkStandardSaveRequest>,
-) -> Result<Json<BenchmarkStandardRecord>, (StatusCode, Json<Value>)> {
-    let standard = save_benchmark_standard(request)
-        .map_err(|message| (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))))?;
-    let payload = serde_json::to_value(&standard).map_err(|err| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({ "error": format!("failed to serialize benchmark standard: {err}") })),
-        )
-    })?;
-    store::upsert_benchmark_standard_value(&payload, true)
-        .await
-        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
-    Ok(Json(standard))
-}
-
-pub async fn post_benchmark_standard_list() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
-    seed_persisted_benchmark_standards()
-        .await
-        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
-    let standards = store::list_benchmark_standards()
-        .await
-        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
-    Ok(Json(json!({ "standards": standards })))
 }
 
 pub async fn post_associate_project_list() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
@@ -1587,6 +1269,77 @@ pub async fn post_proofread(Json(body): Json<Value>) -> Json<Vec<ProofreadFindin
     Json(run_proofread(document_text))
 }
 
+pub async fn post_workspace_settings_get()
+-> Result<Json<WorkspaceSettings>, (StatusCode, Json<Value>)> {
+    let settings = store::get_document("product_workspace_settings")
+        .await
+        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?
+        .and_then(|value| serde_json::from_value(value).ok())
+        .unwrap_or_default();
+    Ok(Json(settings))
+}
+
+pub async fn post_workspace_settings_save(
+    Json(settings): Json<WorkspaceSettings>,
+) -> Result<Json<WorkspaceSettings>, (StatusCode, Json<Value>)> {
+    let saved = WorkspaceSettings {
+        tone: settings.tone.trim().into(),
+        style: settings.style.trim().into(),
+        source_policy: settings.source_policy.trim().into(),
+        updated_by: if settings.updated_by.trim().is_empty() {
+            "Legal Reviewer".into()
+        } else {
+            settings.updated_by.trim().into()
+        },
+    };
+    let payload = serde_json::to_value(&saved).map_err(|err| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("failed to serialize workspace settings: {err}") })),
+        )
+    })?;
+    store::put_document("product_workspace_settings", &payload)
+        .await
+        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    store::append_audit_record(
+        "workspace_settings",
+        "product",
+        "saved",
+        &json!({ "settings": saved }),
+    )
+    .await
+    .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    Ok(Json(saved))
+}
+
+pub async fn post_workspace_activity_append(
+    Json(request): Json<WorkspaceActivityRequest>,
+) -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let id = stable_id(
+        "workspace-activity",
+        &format!("{}:{}", request.label, request.detail),
+    );
+    let payload = json!({
+        "id": id,
+        "label": request.label,
+        "detail": request.detail,
+        "workflow": request.workflow.unwrap_or_else(|| "product".into()),
+        "actor": request.actor.unwrap_or_else(|| "Livebook User".into()),
+        "created_at": chrono::Utc::now().to_rfc3339(),
+    });
+    store::append_audit_record("workspace_activity", &id, "recorded", &payload)
+        .await
+        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    Ok(Json(payload))
+}
+
+pub async fn post_workspace_activity_list() -> Result<Json<Value>, (StatusCode, Json<Value>)> {
+    let activity = store::list_audit_records(Some("workspace_activity"))
+        .await
+        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    Ok(Json(json!({ "activity": activity })))
+}
+
 fn excerpt_for(text: &str, needle: &str) -> String {
     if needle.is_empty() {
         return text.chars().take(120).collect();
@@ -1612,45 +1365,6 @@ fn tokens(value: &str) -> Vec<String> {
         .filter(|part| part.len() > 1)
         .map(ToOwned::to_owned)
         .collect()
-}
-
-fn active_filters(request: &BenchmarkRequest) -> Vec<String> {
-    [
-        request
-            .contract_type
-            .as_deref()
-            .map(|value| format!("contract_type: {value}")),
-        request
-            .jurisdiction
-            .as_deref()
-            .map(|value| format!("jurisdiction: {value}")),
-        request
-            .industry
-            .as_deref()
-            .map(|value| format!("industry: {value}")),
-        request
-            .deal_type
-            .as_deref()
-            .map(|value| format!("deal_type: {value}")),
-        request
-            .party_position
-            .as_deref()
-            .map(|value| format!("party_position: {value}")),
-    ]
-    .into_iter()
-    .flatten()
-    .collect()
-}
-
-fn infer_contract_type(document_text: &str) -> Option<String> {
-    let lower = document_text.to_ascii_lowercase();
-    if lower.contains("lease") {
-        Some("commercial lease".into())
-    } else if lower.contains("services") {
-        Some("master services agreement".into())
-    } else {
-        Some("general commercial agreement".into())
-    }
 }
 
 fn proofread_finding(
@@ -1745,15 +1459,6 @@ async fn persist_precedent_import_result(
         .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
     }
     Ok(())
-}
-
-async fn seed_persisted_benchmark_standards() -> Result<(), String> {
-    let seed_values = seeded_benchmark_standard_records()
-        .into_iter()
-        .map(serde_json::to_value)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(|err| format!("failed to serialize benchmark standards: {err}"))?;
-    store::seed_benchmark_standards(&seed_values).await
 }
 
 async fn draft_clause_with_openai(
@@ -2180,87 +1885,6 @@ mod tests {
 
         let invalid = validate_openai_json(json!({ "citations": "not an array" }), &["answer"]);
         assert!(invalid.is_err());
-    }
-
-    #[test]
-    fn benchmark_review_matches_filters_and_unavailable_state() {
-        let review = run_benchmark_review(BenchmarkRequest {
-            document_text: "This lease has unlimited liability and no audit right.".into(),
-            contract_type: None,
-            jurisdiction: Some("New York".into()),
-            industry: Some("software".into()),
-            deal_type: Some("commercial lease".into()),
-            party_position: Some("tenant".into()),
-            standards_available: true,
-        });
-
-        assert_eq!(
-            review.matched_contract_type.as_deref(),
-            Some("commercial lease")
-        );
-        assert!(
-            review
-                .filters
-                .iter()
-                .any(|filter| filter.contains("New York"))
-        );
-        assert!(
-            review
-                .findings
-                .iter()
-                .any(|finding| finding.status == "off-market")
-        );
-        assert!(
-            review
-                .findings
-                .iter()
-                .any(|finding| finding.suggested_fix.is_some())
-        );
-
-        let unavailable = run_benchmark_review(BenchmarkRequest {
-            document_text: "Niche document".into(),
-            contract_type: None,
-            jurisdiction: None,
-            industry: None,
-            deal_type: None,
-            party_position: None,
-            standards_available: false,
-        });
-        assert!(unavailable.unavailable_reason.is_some());
-        assert!(unavailable.findings.is_empty());
-    }
-
-    #[test]
-    fn benchmark_review_uses_custom_standard_records() {
-        let review = run_benchmark_review_with_records(
-            BenchmarkRequest {
-                document_text:
-                    "This services agreement has unlimited liability and no audit right.".into(),
-                contract_type: Some("master services agreement".into()),
-                jurisdiction: None,
-                industry: None,
-                deal_type: None,
-                party_position: None,
-                standards_available: true,
-            },
-            &[BenchmarkStandardRecord {
-                id: "team-standard".into(),
-                name: "Team standard".into(),
-                contract_type: "master services agreement".into(),
-                visibility: "team".into(),
-                liability_unlimited_prevalence: 7,
-                liability_fix: "Use the team's custom liability cap.".into(),
-                liability_alternatives: Vec::new(),
-                audit_right_prevalence: 81,
-                audit_fix: "Use the team's audit right.".into(),
-                audit_alternatives: Vec::new(),
-            }],
-        );
-
-        assert!(review.findings.iter().any(|finding| {
-            finding.source_standard == "Team standard"
-                && finding.suggested_fix.as_deref() == Some("Use the team's custom liability cap.")
-        }));
     }
 
     #[test]

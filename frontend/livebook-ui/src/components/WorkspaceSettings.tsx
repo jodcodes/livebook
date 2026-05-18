@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAuth } from "@/app/context/AuthContext";
 import { PageHeader, Panel, StatusBadge } from "@/components/premium";
@@ -60,7 +60,36 @@ export default function WorkspaceSettings() {
   const [sourcePolicy, setSourcePolicy] = useState(() => readSettings().sourcePolicy);
   const [notice, setNotice] = useState("");
 
-  const saveSettings = () => {
+  useEffect(() => {
+    let cancelled = false;
+    async function loadServerSettings() {
+      try {
+        const response = await fetch("/api/product/workspace-settings-get", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        });
+        if (!response.ok) return;
+        const saved = (await response.json()) as Partial<{
+          tone: string;
+          style: string;
+          source_policy: string;
+        }>;
+        if (cancelled) return;
+        setTone(saved.tone ?? defaultSettings.tone);
+        setStyle(saved.style ?? defaultSettings.style);
+        setSourcePolicy(saved.source_policy ?? defaultSettings.sourcePolicy);
+      } catch {
+        // Local settings remain the offline fallback.
+      }
+    }
+    void loadServerSettings();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const saveSettings = async () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
@@ -69,7 +98,24 @@ export default function WorkspaceSettings() {
         sourcePolicy,
       })
     );
-    setNotice("Workspace settings saved locally.");
+    try {
+      const response = await fetch("/api/product/workspace-settings-save", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tone,
+          style,
+          source_policy: sourcePolicy,
+          updated_by: "Legal Reviewer",
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Save failed with ${response.status}`);
+      }
+      setNotice("Workspace settings saved for the team.");
+    } catch {
+      setNotice("Workspace settings saved locally; server sync is unavailable.");
+    }
   };
 
   const canManageSharedSettings = userRole === "lawyer";
