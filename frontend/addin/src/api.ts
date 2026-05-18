@@ -3,6 +3,7 @@ import type {
   ChatTurn,
   CreateEscalationResponse,
   PlaybookClause,
+  ProductReviewSession,
   QuestionResponse,
   TabularReviewSession,
 } from "./types";
@@ -119,6 +120,21 @@ export async function reviewContractText(input: {
     body: JSON.stringify({
       contract_text: input.contractText,
       file_name: input.fileName,
+    }),
+  });
+}
+
+export async function reviewWordProduct(input: {
+  documentText: string;
+  actor: string;
+  wordContextAvailable: boolean;
+}): Promise<ProductReviewSession> {
+  return requestJson<ProductReviewSession>("/product/word-review", {
+    method: "POST",
+    body: JSON.stringify({
+      document_text: input.documentText,
+      actor: input.actor,
+      word_context_available: input.wordContextAvailable,
     }),
   });
 }

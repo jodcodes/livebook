@@ -86,6 +86,25 @@ export interface TabularReviewMetrics {
   fallback_rows: number;
 }
 
+export interface ProductReviewFinding {
+  id: string;
+  severity: string;
+  clause_ref: string;
+  status: string;
+  confidence: number;
+  issue: string;
+  source: string;
+  comment: string;
+  redline?: string | null;
+  eligible_for_bulk: boolean;
+}
+
+export interface ProductReviewSession {
+  session_id: string;
+  status: string;
+  findings: ProductReviewFinding[];
+}
+
 export interface CreateEscalationResponse {
   item: {
     id: string;

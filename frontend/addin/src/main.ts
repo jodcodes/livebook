@@ -4,6 +4,7 @@ import {
   listReviewSessions,
   loadPlaybookClause,
   reviewContractText,
+  reviewWordProduct,
 } from "./api";
 import {
   acceptTrackedChangesInSelection,
@@ -23,6 +24,8 @@ import {
 import type {
   ChatTurn,
   PlaybookClause,
+  ProductReviewFinding,
+  ProductReviewSession,
   QuestionResponse,
   TabularReviewRow,
   TabularReviewSession,
@@ -63,6 +66,7 @@ interface State {
   reviewSession: TabularReviewSession | null;
   reviewStatus: Status;
   selectedRowId: string | null;
+  productReviewSession: ProductReviewSession | null;
   selectedReviewClause: PlaybookClause | null;
   reviewSearch: string;
   outcomeFilter: string;
@@ -96,6 +100,7 @@ const state: State = {
   reviewSession: null,
   reviewStatus: "idle",
   selectedRowId: null,
+  productReviewSession: null,
   selectedReviewClause: null,
   reviewSearch: "",
   outcomeFilter: "all",
@@ -329,9 +334,14 @@ function reviewPanel() {
         ${state.reviewStatus === "loading" ? icon("loader", "spin") : icon("scan")}
         ${escapeHtml(state.reviewStatus === "loading" ? copy.runningReview : session ? copy.runReviewAgain : copy.runReview)}
       </button>
+      <button class="secondary-button" type="button" data-action="product-word-review" ${state.reviewStatus === "loading" ? "disabled" : ""}>
+        ${state.reviewStatus === "loading" ? icon("loader", "spin") : icon("spark")}
+        ${escapeHtml(copy.runProductReview)}
+      </button>
 
       ${session ? metricsHtml(session) : ""}
       ${state.reviewSessions.length > 0 ? sessionSelectHtml() : ""}
+      ${productReviewHtml(documentBusy)}
 
       ${
         session
@@ -440,6 +450,57 @@ function reviewDetail(row: TabularReviewRow, suggestion: ReviewSuggestion | null
             </div>`
           : ""
       }
+    </article>
+  `;
+}
+
+function productReviewHtml(documentBusy: boolean) {
+  const session = state.productReviewSession;
+  const copy = ui();
+  if (!session?.findings.length) return "";
+
+  return `
+    <section class="playbook-context">
+      <h3>${escapeHtml(copy.productReviewHeading)}</h3>
+      <div class="review-list">
+        ${session.findings.map((finding) => productFindingCard(finding, documentBusy)).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function productFindingCard(finding: ProductReviewFinding, documentBusy: boolean) {
+  const canRedline = Boolean(finding.redline?.trim());
+  return `
+    <article class="detail-card">
+      <div class="detail-header">
+        <div>
+          <p class="eyebrow">${escapeHtml(finding.clause_ref)} · ${Math.round(finding.confidence * 100)}%</p>
+          <h3>${escapeHtml(finding.issue)}</h3>
+        </div>
+        <span class="outcome-pill ${finding.severity === "high" ? "danger" : finding.severity === "medium" ? "warning" : ""}">
+          ${escapeHtml(finding.severity)}
+        </span>
+      </div>
+      ${detailBlock(ui().contractEvidence, finding.source || ui().noEvidence)}
+      ${detailBlock(ui().commentPreview, finding.comment)}
+      ${finding.redline ? detailBlock(ui().recommendedWording, finding.redline) : ""}
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="find-product-finding" data-finding="${escapeAttr(finding.id)}">
+          ${icon("target")}${escapeHtml(ui().findInWord)}
+        </button>
+        <button type="button" data-action="comment-product-finding" data-finding="${escapeAttr(finding.id)}" ${documentBusy || !state.capabilities.comments ? "disabled" : ""}>
+          ${icon("comment")}${escapeHtml(ui().addComment)}
+        </button>
+      </div>
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="redline-product-finding" data-finding="${escapeAttr(finding.id)}" ${documentBusy || !canRedline ? "disabled" : ""}>
+          ${icon("branch")}${escapeHtml(ui().applyRedline)}
+        </button>
+        <button type="button" data-action="redline-comment-product-finding" data-finding="${escapeAttr(finding.id)}" ${documentBusy || !canRedline || !state.capabilities.comments ? "disabled" : ""}>
+          ${icon("spark")}${escapeHtml(ui().applyRedlineComment)}
+        </button>
+      </div>
     </article>
   `;
 }
@@ -667,6 +728,7 @@ function bindEvents() {
       if (action === "read-selection") void handleReadSelection();
       if (action === "read-document") void handleReadDocument();
       if (action === "review-contract") void handleReviewContract();
+      if (action === "product-word-review") void handleProductWordReview();
       if (action === "refresh-sessions") void handleRefreshSessions();
       if (action === "refresh-word-state") void refreshWordContext();
       if (action === "insert-answer") void handleInsert(state.answer?.answer);
@@ -683,6 +745,10 @@ function bindEvents() {
       if (action === "comment-review-row") void handleReviewSuggestion(false);
       if (action === "redline-review-row") void handleReviewSuggestion("redline");
       if (action === "redline-comment-review-row") void handleReviewSuggestion("redline-comment");
+      if (action === "find-product-finding") void handleFindProductFinding(button.dataset.finding);
+      if (action === "comment-product-finding") void handleProductFindingSuggestion(button.dataset.finding, false);
+      if (action === "redline-product-finding") void handleProductFindingSuggestion(button.dataset.finding, "redline");
+      if (action === "redline-comment-product-finding") void handleProductFindingSuggestion(button.dataset.finding, "redline-comment");
     });
   });
 }
@@ -760,6 +826,30 @@ async function handleReviewContract() {
         : ui().reviewNoMatches;
     await handleRefreshSessions(true);
     await loadClauseForRow(currentRow());
+  } catch (error) {
+    state.reviewStatus = "error";
+    state.error = messageFromError(error);
+  }
+  render();
+}
+
+async function handleProductWordReview() {
+  if (!state.contractText.trim()) {
+    await handleReadDocument();
+    if (!state.contractText.trim()) return;
+  }
+  state.reviewStatus = "loading";
+  state.error = "";
+  state.notice = "";
+  render();
+  try {
+    state.productReviewSession = await reviewWordProduct({
+      documentText: state.contractText,
+      actor: "Word Add-in User",
+      wordContextAvailable: state.wordAvailable,
+    });
+    state.reviewStatus = "success";
+    state.notice = ui().productReviewCreated(state.productReviewSession.findings.length);
   } catch (error) {
     state.reviewStatus = "error";
     state.error = messageFromError(error);
@@ -928,6 +1018,40 @@ async function handleFindReviewMatch() {
   });
 }
 
+async function handleFindProductFinding(findingId: string | undefined) {
+  const finding = productFindingById(findingId);
+  if (!finding) return;
+  await withDocumentAction(async () => {
+    await selectTextInDocument([finding.source, finding.clause_ref, finding.issue], finding.id);
+    state.notice = ui().matchedClauseSelected;
+    await refreshWordContext(true);
+  });
+}
+
+async function handleProductFindingSuggestion(
+  findingId: string | undefined,
+  mode: false | "redline" | "redline-comment",
+) {
+  const finding = productFindingById(findingId);
+  if (!finding) return;
+  await withDocumentAction(async () => {
+    await applySuggestionToMatchedText({
+      anchorKey: finding.id,
+      searchTerms: [finding.source, finding.clause_ref, finding.issue],
+      replacementText: mode ? finding.redline ?? undefined : undefined,
+      commentText: mode === "redline-comment" || mode === false ? buildProductReviewComment(finding) : undefined,
+      trackingMode: "TrackMineOnly",
+    });
+    state.notice =
+      mode === "redline-comment"
+        ? ui().redlineAndCommentApplied
+        : mode === "redline"
+          ? ui().redlineApplied
+          : ui().commentAdded;
+    await refreshWordContext(true);
+  });
+}
+
 async function handleReviewSuggestion(mode: false | "redline" | "redline-comment") {
   const row = currentRow();
   if (!row) return;
@@ -1036,6 +1160,11 @@ function currentRow() {
   );
 }
 
+function productFindingById(findingId: string | undefined) {
+  if (!findingId) return null;
+  return state.productReviewSession?.findings.find((finding) => finding.id === findingId) ?? null;
+}
+
 function preferredReviewSession(sessions: TabularReviewSession[]) {
   return sessions.find((session) => session.rows.length > 0) ?? sessions[0] ?? null;
 }
@@ -1096,6 +1225,21 @@ function buildReviewComment(
     lines.push(`${copy.commentRedLine}: ${clause.red_line}`);
   }
 
+  return lines.join("\n");
+}
+
+function buildProductReviewComment(finding: ProductReviewFinding) {
+  const copy = ui();
+  const lines = [
+    `${copy.commentClause}: ${finding.clause_ref}`,
+    `${copy.commentOutcome}: ${finding.severity}`,
+    `${copy.commentConfidence}: ${Math.round(finding.confidence * 100)}%`,
+    `${copy.commentReason}: ${finding.issue}`,
+    `${copy.contractEvidence}: ${finding.source || copy.noEvidence}`,
+  ];
+  if (finding.redline) {
+    lines.push(`${copy.commentSuggested}: ${finding.redline}`);
+  }
   return lines.join("\n");
 }
 
@@ -1234,6 +1378,8 @@ const COPY_EN = {
   runningReview: "Running review",
   runReview: "Run review",
   runReviewAgain: "Run review again",
+  runProductReview: "Run full-document review",
+  productReviewHeading: "Full-document findings",
   allOutcomes: "All outcomes",
   allConfidence: "All confidence",
   unknownCounterparty: "Unknown counterparty",
@@ -1305,6 +1451,7 @@ const COPY_EN = {
   selectionLoaded: "Loaded the current Word selection.",
   documentLoaded: "Loaded the current Word document.",
   reviewCreated: (count: number) => `Review session created with ${count} row${count === 1 ? "" : "s"}.`,
+  productReviewCreated: (count: number) => `Full-document review returned ${count} finding${count === 1 ? "" : "s"}.`,
   reviewNoMatches: "Review completed, but no playbook clauses matched this Word content.",
   insertedIntoWord: "Inserted into the Word document.",
   commentAdded: "Added a native Word comment.",
@@ -1363,6 +1510,8 @@ const COPY_DE = {
   runningReview: "Prüfung läuft",
   runReview: "Prüfung starten",
   runReviewAgain: "Prüfung erneut starten",
+  runProductReview: "Ganzdokumentprüfung starten",
+  productReviewHeading: "Ganzdokument-Findings",
   allOutcomes: "Alle Ergebnisse",
   allConfidence: "Alle Sicherheiten",
   unknownCounterparty: "Unbekannte Gegenpartei",
@@ -1434,6 +1583,7 @@ const COPY_DE = {
   selectionLoaded: "Die aktuelle Word-Auswahl wurde geladen.",
   documentLoaded: "Das aktuelle Word-Dokument wurde geladen.",
   reviewCreated: (count: number) => `Review-Session mit ${count} Zeile${count === 1 ? "" : "n"} erstellt.`,
+  productReviewCreated: (count: number) => `Ganzdokumentprüfung hat ${count} Finding${count === 1 ? "" : "s"} erzeugt.`,
   reviewNoMatches: "Prüfung abgeschlossen, aber es wurden keine passenden Playbook-Klauseln gefunden.",
   insertedIntoWord: "In das Word-Dokument eingefügt.",
   commentAdded: "Ein nativer Word-Kommentar wurde hinzugefügt.",
