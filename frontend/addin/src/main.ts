@@ -1,10 +1,13 @@
 import {
   askLivebook,
   createEscalation,
+  draftClause,
   listReviewSessions,
   loadPlaybookClause,
+  planProject,
   reviewContractText,
   reviewWordProduct,
+  runProofread,
 } from "./api";
 import {
   acceptTrackedChangesInSelection,
@@ -22,17 +25,20 @@ import {
   setChangeTrackingMode,
 } from "./office";
 import type {
+  AgentProject,
   ChatTurn,
+  DraftResult,
   PlaybookClause,
   ProductReviewFinding,
   ProductReviewSession,
+  ProofreadFinding,
   QuestionResponse,
   TabularReviewRow,
   TabularReviewSession,
 } from "./types";
 import type { ChangeTrackingMode, ReviewedTextSnapshot, WordCapabilities } from "./office";
 
-type Tab = "review" | "ask";
+type Tab = "review" | "ask" | "draft" | "projects" | "proofread";
 type Status = "idle" | "loading" | "success" | "error";
 type ContractSource = "selection" | "document";
 type Locale = "en" | "de";
@@ -75,6 +81,14 @@ interface State {
   error: string;
   capabilities: WordCapabilities;
   reviewedText: ReviewedTextSnapshot | null;
+  draftInstructions: string;
+  draftStatus: Status;
+  draftResult: DraftResult | null;
+  projectGoal: string;
+  projectStatus: Status;
+  projectResult: AgentProject | null;
+  proofreadStatus: Status;
+  proofreadFindings: ProofreadFinding[];
 }
 
 const root = document.getElementById("root");
@@ -115,6 +129,14 @@ const state: State = {
     changeTrackingMode: null,
   },
   reviewedText: null,
+  draftInstructions: "",
+  draftStatus: "idle",
+  draftResult: null,
+  projectGoal: "",
+  projectStatus: "idle",
+  projectResult: null,
+  proofreadStatus: "idle",
+  proofreadFindings: [],
 };
 
 void boot();
@@ -164,6 +186,9 @@ function render() {
       <nav class="tabs" aria-label="${copy.modes}">
         ${tabButton("review", copy.reviewTab, "check")}
         ${tabButton("ask", copy.askTab, "message")}
+        ${tabButton("draft", copy.draftTab, "document")}
+        ${tabButton("projects", copy.projectsTab, "branch")}
+        ${tabButton("proofread", copy.proofreadTab, "scan")}
       </nav>
       ${
         state.ready && !state.wordAvailable
@@ -211,7 +236,11 @@ function tabButton(tab: Tab, label: string, iconName: string) {
 }
 
 function panelHtml() {
-  return state.activeTab === "review" ? reviewPanel() : askPanel();
+  if (state.activeTab === "review") return reviewPanel();
+  if (state.activeTab === "ask") return askPanel();
+  if (state.activeTab === "draft") return draftPanel();
+  if (state.activeTab === "projects") return projectsPanel();
+  return proofreadPanel();
 }
 
 function wordToolsPanel() {
@@ -637,6 +666,201 @@ function answerCard(answer: QuestionResponse) {
   `;
 }
 
+function draftPanel() {
+  const copy = ui();
+  const busy = state.draftStatus === "loading";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">${copy.draftEyebrow}</p>
+          <h2>${copy.draftHeading}</h2>
+        </div>
+        <div class="toolbar">
+          <button class="icon-button" type="button" data-action="read-selection" title="${copy.readSelection}">
+            ${icon("clipboard")}
+          </button>
+          <button class="icon-button" type="button" data-action="read-document" title="${copy.readDocument}">
+            ${icon("document")}
+          </button>
+        </div>
+      </div>
+
+      ${contextPreview(copy.draftReadPrompt)}
+
+      <form class="question-form" data-form="draft">
+        <label for="draftInstructions">${copy.draftInstructionsLabel}</label>
+        <textarea id="draftInstructions" rows="4" placeholder="${escapeAttr(copy.draftInstructionsPlaceholder)}">${escapeHtml(state.draftInstructions)}</textarea>
+        <button class="primary-button" type="submit" ${busy ? "disabled" : ""}>
+          ${busy ? icon("loader", "spin") : icon("spark")}
+          ${escapeHtml(busy ? copy.drafting : copy.draftButton)}
+        </button>
+      </form>
+
+      ${state.draftResult ? draftResultCard(state.draftResult) : ""}
+    </section>
+  `;
+}
+
+function draftResultCard(result: DraftResult) {
+  const copy = ui();
+  const documentBusy = state.documentActionStatus === "loading";
+  return `
+    <article class="answer-card">
+      <div class="result-title">${icon("spark")}<span>${copy.draftResultTitle}</span></div>
+      ${detailBlock(copy.recommendedWording, result.content)}
+      ${result.assumptions.length ? detailBlock(copy.assumptions, result.assumptions.join("\n")) : ""}
+      ${result.review_notes.length ? detailBlock(copy.reviewNotes, result.review_notes.join("\n")) : ""}
+      ${result.sources.length ? groundingHtml(result.sources.map((source) => `${copy.source}: ${source}`)) : ""}
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="insert-draft">${icon("plus")}${escapeHtml(copy.insertDraft)}</button>
+        <button type="button" data-action="comment-draft" ${documentBusy || !state.capabilities.comments ? "disabled" : ""}>${icon("comment")}${escapeHtml(copy.addComment)}</button>
+      </div>
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="redline-draft" ${documentBusy || !state.capabilities.changeTracking ? "disabled" : ""}>${icon("branch")}${escapeHtml(copy.applyRedline)}</button>
+        <button type="button" data-action="redline-comment-draft" ${documentBusy || !state.capabilities.changeTracking || !state.capabilities.comments ? "disabled" : ""}>${icon("spark")}${escapeHtml(copy.applyRedlineComment)}</button>
+      </div>
+    </article>
+  `;
+}
+
+function projectsPanel() {
+  const copy = ui();
+  const busy = state.projectStatus === "loading";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">${copy.projectsEyebrow}</p>
+          <h2>${copy.projectsHeading}</h2>
+        </div>
+        <button class="icon-button" type="button" data-action="read-document" title="${copy.readDocument}">
+          ${icon("document")}
+        </button>
+      </div>
+
+      ${contextPreview(copy.projectsReadPrompt)}
+
+      <form class="question-form" data-form="projects">
+        <label for="projectGoal">${copy.projectGoalLabel}</label>
+        <textarea id="projectGoal" rows="4" placeholder="${escapeAttr(copy.projectGoalPlaceholder)}">${escapeHtml(state.projectGoal)}</textarea>
+        <button class="primary-button" type="submit" ${busy ? "disabled" : ""}>
+          ${busy ? icon("loader", "spin") : icon("branch")}
+          ${escapeHtml(busy ? copy.planningProject : copy.projectButton)}
+        </button>
+      </form>
+
+      ${state.projectResult ? projectResultCard(state.projectResult) : ""}
+    </section>
+  `;
+}
+
+function projectResultCard(project: AgentProject) {
+  const copy = ui();
+  const documentBusy = state.documentActionStatus === "loading";
+  return `
+    <article class="answer-card ${project.needs_clarification ? "escalation" : ""}">
+      <div class="result-title">${icon("branch")}<span>${copy.projectResultTitle}</span></div>
+      <dl class="answer-meta">
+        <div><dt>${copy.status}</dt><dd>${escapeHtml(project.status)}</dd></div>
+        <div><dt>${copy.projectId}</dt><dd>${escapeHtml(project.project_id)}</dd></div>
+      </dl>
+      ${listBlock(copy.taskPlan, project.task_plan)}
+      ${listBlock(copy.openIssues, project.open_issues)}
+      ${listBlock(copy.nextActions, project.next_actions)}
+      ${listBlock(copy.proposedUpdates, project.proposed_updates.map((update) => `${update.change_type}: ${update.current_value} -> ${update.suggested_value}`))}
+      ${projectSummaryHtml(project)}
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="insert-project-summary">${icon("plus")}${escapeHtml(copy.insertSummary)}</button>
+        <button type="button" data-action="comment-project" ${documentBusy || !state.capabilities.comments ? "disabled" : ""}>${icon("comment")}${escapeHtml(copy.addComment)}</button>
+      </div>
+    </article>
+  `;
+}
+
+function proofreadPanel() {
+  const copy = ui();
+  const busy = state.proofreadStatus === "loading";
+  return `
+    <section class="panel">
+      <div class="panel-heading">
+        <div>
+          <p class="eyebrow">${copy.proofreadEyebrow}</p>
+          <h2>${copy.proofreadHeading}</h2>
+        </div>
+        <button class="icon-button" type="button" data-action="read-document" title="${copy.readDocument}">
+          ${icon("document")}
+        </button>
+      </div>
+
+      ${contextPreview(copy.proofreadReadPrompt)}
+
+      <button class="primary-button" type="button" data-action="run-proofread" ${busy ? "disabled" : ""}>
+        ${busy ? icon("loader", "spin") : icon("scan")}
+        ${escapeHtml(busy ? copy.proofreading : copy.proofreadButton)}
+      </button>
+
+      ${
+        state.proofreadFindings.length
+          ? `<div class="review-list">${state.proofreadFindings.map(proofreadFindingCard).join("")}</div>`
+          : `<div class="empty-state">${icon("scan")}<span>${copy.noProofreadFindings}</span></div>`
+      }
+    </section>
+  `;
+}
+
+function proofreadFindingCard(finding: ProofreadFinding) {
+  const copy = ui();
+  const documentBusy = state.documentActionStatus === "loading";
+  return `
+    <article class="detail-card">
+      <div class="detail-header">
+        <div>
+          <p class="eyebrow">${escapeHtml(finding.kind)} · ${Math.round(finding.confidence * 100)}%</p>
+          <h3>${escapeHtml(finding.message)}</h3>
+        </div>
+        <span class="outcome-pill ${finding.status === "open" ? "amber" : "green"}">${escapeHtml(finding.status)}</span>
+      </div>
+      ${finding.suggestion ? detailBlock(copy.recommendedWording, finding.suggestion) : ""}
+      <div class="action-row action-row-wide">
+        <button type="button" data-action="comment-proofread" data-finding="${escapeAttr(finding.id)}" ${documentBusy || !state.capabilities.comments ? "disabled" : ""}>${icon("comment")}${escapeHtml(copy.addComment)}</button>
+        <button type="button" data-action="redline-proofread" data-finding="${escapeAttr(finding.id)}" ${documentBusy || !finding.suggestion || !state.capabilities.changeTracking ? "disabled" : ""}>${icon("branch")}${escapeHtml(copy.applyRedline)}</button>
+      </div>
+    </article>
+  `;
+}
+
+function contextPreview(emptyPrompt: string) {
+  const copy = ui();
+  const text = state.contractText || state.selectedText;
+  return `
+    <div class="review-source">
+      <div class="source-header">
+        <span>${state.contractSource === "selection" ? copy.selectionLabel : copy.documentLabel}</span>
+        <strong>${wordCount(text)} ${escapeHtml(copy.words)}</strong>
+      </div>
+      <p>${escapeHtml(previewText(text || emptyPrompt))}</p>
+    </div>
+  `;
+}
+
+function listBlock(title: string, items: string[]) {
+  if (!items.length) return "";
+  return detailBlock(title, items.map((item) => `- ${item}`).join("\n"));
+}
+
+function projectSummaryHtml(project: AgentProject) {
+  const summaries = project.document_summaries.map((summary) => {
+    const details = [
+      summary.detected_parties.length ? `${ui().parties}: ${summary.detected_parties.join(", ")}` : "",
+      summary.detected_dates.length ? `${ui().dates}: ${summary.detected_dates.join(", ")}` : "",
+      summary.detected_defined_terms.length ? `${ui().definedTerms}: ${summary.detected_defined_terms.join(", ")}` : "",
+    ].filter(Boolean);
+    return `${summary.name}${details.length ? `\n${details.join("\n")}` : ""}`;
+  });
+  return listBlock(ui().documentSummaries, summaries);
+}
+
 function detailBlock(title: string, body: string) {
   return `
     <div class="detail-block">
@@ -686,6 +910,18 @@ function bindEvents() {
     event.preventDefault();
     state.escalationReason = valueOf("escalationReason");
     void handleEscalation();
+  });
+
+  document.querySelector<HTMLFormElement>('[data-form="draft"]')?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.draftInstructions = valueOf("draftInstructions");
+    void handleDraftClause();
+  });
+
+  document.querySelector<HTMLFormElement>('[data-form="projects"]')?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    state.projectGoal = valueOf("projectGoal");
+    void handlePlanProject();
   });
 
   document.getElementById("reviewSearch")?.addEventListener("input", (event) => {
@@ -749,6 +985,15 @@ function bindEvents() {
       if (action === "comment-product-finding") void handleProductFindingSuggestion(button.dataset.finding, false);
       if (action === "redline-product-finding") void handleProductFindingSuggestion(button.dataset.finding, "redline");
       if (action === "redline-comment-product-finding") void handleProductFindingSuggestion(button.dataset.finding, "redline-comment");
+      if (action === "insert-draft") void handleInsert(state.draftResult?.content);
+      if (action === "comment-draft") void handleDraftDocumentAction(false);
+      if (action === "redline-draft") void handleDraftDocumentAction("redline");
+      if (action === "redline-comment-draft") void handleDraftDocumentAction("redline-comment");
+      if (action === "insert-project-summary") void handleInsert(projectSummaryText());
+      if (action === "comment-project") void handleProjectComment();
+      if (action === "run-proofread") void handleProofread();
+      if (action === "comment-proofread") void handleProofreadFinding(button.dataset.finding, false);
+      if (action === "redline-proofread") void handleProofreadFinding(button.dataset.finding, "redline");
     });
   });
 }
@@ -904,6 +1149,114 @@ async function handleEscalation() {
     state.error = messageFromError(error);
   }
   render();
+}
+
+async function handleDraftClause() {
+  if (!state.draftInstructions.trim()) return;
+  state.draftStatus = "loading";
+  state.error = "";
+  state.notice = "";
+  render();
+  try {
+    const context = await ensureDocumentContext();
+    state.draftResult = await draftClause({
+      instructions: state.draftInstructions,
+      documentContext: context,
+      partyPosition: "balanced",
+      writingStyle: "clear legal drafting",
+    });
+    state.draftStatus = "success";
+    state.notice = ui().draftCreated;
+  } catch (error) {
+    state.draftStatus = "error";
+    state.error = messageFromError(error);
+  }
+  render();
+}
+
+async function handlePlanProject() {
+  if (!state.projectGoal.trim()) return;
+  state.projectStatus = "loading";
+  state.error = "";
+  state.notice = "";
+  render();
+  try {
+    const context = await ensureDocumentContext();
+    state.projectResult = await planProject({
+      goal: state.projectGoal,
+      documentText: context,
+    });
+    state.projectStatus = "success";
+    state.notice = ui().projectPlanned;
+  } catch (error) {
+    state.projectStatus = "error";
+    state.error = messageFromError(error);
+  }
+  render();
+}
+
+async function handleProofread() {
+  state.proofreadStatus = "loading";
+  state.error = "";
+  state.notice = "";
+  render();
+  try {
+    const context = await ensureDocumentContext();
+    state.proofreadFindings = await runProofread({ documentText: context });
+    state.proofreadStatus = "success";
+    state.notice = ui().proofreadComplete(state.proofreadFindings.length);
+  } catch (error) {
+    state.proofreadStatus = "error";
+    state.error = messageFromError(error);
+  }
+  render();
+}
+
+async function handleDraftDocumentAction(mode: false | "redline" | "redline-comment") {
+  if (!state.draftResult?.content.trim()) return;
+  await withDocumentAction(async () => {
+    if (mode) {
+      await replaceSelectionWithTrackedText(state.draftResult?.content ?? "", {
+        commentText: mode === "redline-comment" ? buildDraftComment() : undefined,
+        trackingMode: "TrackMineOnly",
+      });
+      state.notice = mode === "redline-comment" ? ui().redlineAndCommentApplied : ui().redlineApplied;
+    } else {
+      await insertCommentOnSelection(buildDraftComment());
+      state.notice = ui().commentAdded;
+    }
+    await refreshWordContext(true);
+  });
+}
+
+async function handleProjectComment() {
+  if (!state.projectResult) return;
+  await withDocumentAction(async () => {
+    await insertCommentOnSelection(projectSummaryText());
+    state.notice = ui().commentAdded;
+    await refreshWordContext(true);
+  });
+}
+
+async function handleProofreadFinding(
+  findingId: string | undefined,
+  mode: false | "redline",
+) {
+  const finding = proofreadFindingById(findingId);
+  if (!finding) return;
+  await withDocumentAction(async () => {
+    if (mode === "redline" && finding.suggestion?.trim()) {
+      await replaceSelectionWithTrackedText(finding.suggestion, {
+        commentText: buildProofreadComment(finding),
+        trackingMode: "TrackMineOnly",
+      });
+      state.notice = ui().redlineAndCommentApplied;
+    } else {
+      await insertCommentOnSelection(buildProofreadComment(finding));
+      state.notice = ui().commentAdded;
+    }
+    await refreshWordContext(true);
+  });
 }
 
 async function handleInsert(text: string | null | undefined) {
@@ -1165,6 +1518,11 @@ function productFindingById(findingId: string | undefined) {
   return state.productReviewSession?.findings.find((finding) => finding.id === findingId) ?? null;
 }
 
+function proofreadFindingById(findingId: string | undefined) {
+  if (!findingId) return null;
+  return state.proofreadFindings.find((finding) => finding.id === findingId) ?? null;
+}
+
 function preferredReviewSession(sessions: TabularReviewSession[]) {
   return sessions.find((session) => session.rows.length > 0) ?? sessions[0] ?? null;
 }
@@ -1258,6 +1616,64 @@ function buildAskComment(answer: QuestionResponse) {
     lines.push(`${copy.commentSuggested}: ${answer.suggestedClause}`);
   }
   return lines.join("\n");
+}
+
+function buildDraftComment() {
+  const copy = ui();
+  const result = state.draftResult;
+  if (!result) return "";
+  const lines = [
+    `${copy.commentDraftRequest}: ${state.draftInstructions || copy.notSet}`,
+    `${copy.commentSuggested}: ${result.content}`,
+  ];
+  if (result.assumptions.length) {
+    lines.push(`${copy.assumptions}: ${result.assumptions.join("; ")}`);
+  }
+  if (result.review_notes.length) {
+    lines.push(`${copy.reviewNotes}: ${result.review_notes.join("; ")}`);
+  }
+  return lines.join("\n");
+}
+
+function buildProofreadComment(finding: ProofreadFinding) {
+  const copy = ui();
+  const lines = [
+    `${copy.commentOutcome}: ${finding.kind}`,
+    `${copy.commentConfidence}: ${Math.round(finding.confidence * 100)}%`,
+    `${copy.commentReason}: ${finding.message}`,
+  ];
+  if (finding.suggestion) {
+    lines.push(`${copy.commentSuggested}: ${finding.suggestion}`);
+  }
+  return lines.join("\n");
+}
+
+function projectSummaryText() {
+  const copy = ui();
+  const project = state.projectResult;
+  if (!project) return "";
+  const sections = [
+    `${copy.projectResultTitle}: ${project.project_id}`,
+    `${copy.status}: ${project.status}`,
+    project.task_plan.length ? `${copy.taskPlan}\n${project.task_plan.map((item) => `- ${item}`).join("\n")}` : "",
+    project.open_issues.length ? `${copy.openIssues}\n${project.open_issues.map((item) => `- ${item}`).join("\n")}` : "",
+    project.next_actions.length ? `${copy.nextActions}\n${project.next_actions.map((item) => `- ${item}`).join("\n")}` : "",
+    project.proposed_updates.length
+      ? `${copy.proposedUpdates}\n${project.proposed_updates
+          .map((update) => `- ${update.change_type}: ${update.current_value} -> ${update.suggested_value}`)
+          .join("\n")}`
+      : "",
+  ].filter(Boolean);
+  return sections.join("\n\n");
+}
+
+async function ensureDocumentContext() {
+  if (state.contractText.trim()) return state.contractText;
+  if (state.selectedText.trim()) return state.selectedText;
+  if (!state.wordAvailable) return "";
+  state.contractText = await readDocumentText();
+  state.contractSource = "document";
+  return state.contractText;
 }
 
 function uniqueNonEmpty(values: Array<string | null | undefined>) {
@@ -1361,6 +1777,9 @@ const COPY_EN = {
   modes: "Livebook modes",
   reviewTab: "Review",
   askTab: "Ask",
+  draftTab: "Draft",
+  projectsTab: "Projects",
+  proofreadTab: "Proofread",
   wordRequired: "Document actions are available when this pane is opened from Microsoft Word.",
   wordConnected: "Word connected",
   browserOnly: "Browser only",
@@ -1418,6 +1837,43 @@ const COPY_EN = {
   questionPlaceholder: "Ask about clauses, fallback positions, or what wording to use...",
   askButton: "Ask Livebook",
   answerTitle: "Grounded answer",
+  draftEyebrow: "Draft",
+  draftHeading: "Draft with document context",
+  draftReadPrompt: "Read the Word document or selected text before drafting.",
+  draftInstructionsLabel: "Drafting request",
+  draftInstructionsPlaceholder: "Describe the clause, amendment, or fallback language you need...",
+  drafting: "Drafting",
+  draftButton: "Draft clause",
+  draftResultTitle: "Drafted wording",
+  assumptions: "Assumptions",
+  reviewNotes: "Review notes",
+  source: "Source",
+  insertDraft: "Insert draft",
+  projectsEyebrow: "Projects",
+  projectsHeading: "Plan supervised document work",
+  projectsReadPrompt: "Read the Word document before planning project work.",
+  projectGoalLabel: "Project goal",
+  projectGoalPlaceholder: "Describe the supervised document task, for example harmonize party names or prepare closing updates...",
+  planningProject: "Planning project",
+  projectButton: "Plan project",
+  projectResultTitle: "Project plan",
+  status: "Status",
+  projectId: "Project ID",
+  taskPlan: "Task plan",
+  openIssues: "Open issues",
+  nextActions: "Next actions",
+  proposedUpdates: "Proposed updates",
+  documentSummaries: "Document summaries",
+  parties: "Parties",
+  dates: "Dates",
+  definedTerms: "Defined terms",
+  insertSummary: "Insert summary",
+  proofreadEyebrow: "Proofread",
+  proofreadHeading: "Final checks before signature",
+  proofreadReadPrompt: "Read the Word document before running final proofread checks.",
+  proofreading: "Proofreading",
+  proofreadButton: "Run proofread",
+  noProofreadFindings: "No proofread findings yet.",
   escalationRequired: "Escalation required",
   clause: "Clause",
   position: "Position",
@@ -1452,6 +1908,9 @@ const COPY_EN = {
   documentLoaded: "Loaded the current Word document.",
   reviewCreated: (count: number) => `Review session created with ${count} row${count === 1 ? "" : "s"}.`,
   productReviewCreated: (count: number) => `Full-document review returned ${count} finding${count === 1 ? "" : "s"}.`,
+  draftCreated: "Draft created from the current Word context.",
+  projectPlanned: "Project plan created from the current Word context.",
+  proofreadComplete: (count: number) => `Proofread returned ${count} finding${count === 1 ? "" : "s"}.`,
   reviewNoMatches: "Review completed, but no playbook clauses matched this Word content.",
   insertedIntoWord: "Inserted into the Word document.",
   commentAdded: "Added a native Word comment.",
@@ -1478,6 +1937,7 @@ const COPY_EN = {
   commentReason: "Reason",
   commentSuggested: "Suggested wording",
   commentRedLine: "Red line",
+  commentDraftRequest: "Drafting request",
   wordSelectionFile: "Word selection",
   wordDocumentFile: "Word document",
   wordAddinAnswer: "Word add-in answer",
@@ -1493,6 +1953,9 @@ const COPY_DE = {
   modes: "Livebook-Modi",
   reviewTab: "Prüfen",
   askTab: "Fragen",
+  draftTab: "Draft",
+  projectsTab: "Projekte",
+  proofreadTab: "Proofread",
   wordRequired: "Dokumentaktionen sind verfügbar, wenn dieses Panel aus Microsoft Word geöffnet wird.",
   wordConnected: "Word verbunden",
   browserOnly: "Nur Browser",
@@ -1550,6 +2013,43 @@ const COPY_DE = {
   questionPlaceholder: "Frage nach Klauseln, Fallback-Positionen oder welcher Wortlaut verwendet werden soll...",
   askButton: "Livebook fragen",
   answerTitle: "Begründete Antwort",
+  draftEyebrow: "Draft",
+  draftHeading: "Mit Dokumentkontext entwerfen",
+  draftReadPrompt: "Lies zuerst das Word-Dokument oder die aktuelle Auswahl ein, bevor du entwirfst.",
+  draftInstructionsLabel: "Drafting-Auftrag",
+  draftInstructionsPlaceholder: "Beschreibe die Klausel, Änderung oder Fallback-Formulierung, die du brauchst...",
+  drafting: "Entwurf läuft",
+  draftButton: "Klausel entwerfen",
+  draftResultTitle: "Entworfener Wortlaut",
+  assumptions: "Annahmen",
+  reviewNotes: "Review-Hinweise",
+  source: "Quelle",
+  insertDraft: "Entwurf einfügen",
+  projectsEyebrow: "Projekte",
+  projectsHeading: "Beaufsichtigte Dokumentarbeit planen",
+  projectsReadPrompt: "Lies zuerst das Word-Dokument ein, bevor du Projektarbeit planst.",
+  projectGoalLabel: "Projektziel",
+  projectGoalPlaceholder: "Beschreibe die beaufsichtigte Dokumentaufgabe, z. B. Parteien harmonisieren oder Closing-Updates vorbereiten...",
+  planningProject: "Projekt wird geplant",
+  projectButton: "Projekt planen",
+  projectResultTitle: "Projektplan",
+  status: "Status",
+  projectId: "Projekt-ID",
+  taskPlan: "Aufgabenplan",
+  openIssues: "Offene Punkte",
+  nextActions: "Nächste Schritte",
+  proposedUpdates: "Vorgeschlagene Änderungen",
+  documentSummaries: "Dokumentzusammenfassungen",
+  parties: "Parteien",
+  dates: "Daten",
+  definedTerms: "Definierte Begriffe",
+  insertSummary: "Zusammenfassung einfügen",
+  proofreadEyebrow: "Proofread",
+  proofreadHeading: "Finale Checks vor der Signatur",
+  proofreadReadPrompt: "Lies zuerst das Word-Dokument ein, bevor du finale Proofread-Checks startest.",
+  proofreading: "Proofread läuft",
+  proofreadButton: "Proofread starten",
+  noProofreadFindings: "Noch keine Proofread-Findings.",
   escalationRequired: "Eskalation erforderlich",
   clause: "Klausel",
   position: "Position",
@@ -1584,6 +2084,9 @@ const COPY_DE = {
   documentLoaded: "Das aktuelle Word-Dokument wurde geladen.",
   reviewCreated: (count: number) => `Review-Session mit ${count} Zeile${count === 1 ? "" : "n"} erstellt.`,
   productReviewCreated: (count: number) => `Ganzdokumentprüfung hat ${count} Finding${count === 1 ? "" : "s"} erzeugt.`,
+  draftCreated: "Entwurf aus dem aktuellen Word-Kontext erstellt.",
+  projectPlanned: "Projektplan aus dem aktuellen Word-Kontext erstellt.",
+  proofreadComplete: (count: number) => `Proofread hat ${count} Finding${count === 1 ? "" : "s"} erzeugt.`,
   reviewNoMatches: "Prüfung abgeschlossen, aber es wurden keine passenden Playbook-Klauseln gefunden.",
   insertedIntoWord: "In das Word-Dokument eingefügt.",
   commentAdded: "Ein nativer Word-Kommentar wurde hinzugefügt.",
@@ -1610,6 +2113,7 @@ const COPY_DE = {
   commentReason: "Begründung",
   commentSuggested: "Empfohlene Formulierung",
   commentRedLine: "Red Line",
+  commentDraftRequest: "Drafting-Auftrag",
   wordSelectionFile: "Word-Auswahl",
   wordDocumentFile: "Word-Dokument",
   wordAddinAnswer: "Word-Add-in-Antwort",

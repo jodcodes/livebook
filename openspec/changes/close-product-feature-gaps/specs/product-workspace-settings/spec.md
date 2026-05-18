@@ -3,7 +3,7 @@
 ## Purpose
 Define product-level roles, permissions, style settings, and document-source workflows needed to support collaboration without specifying infrastructure.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Product Roles
 The system SHALL define product roles for legal reviewer, business user, admin, and viewer.
@@ -99,4 +99,3 @@ The system SHALL show permission-aware UI states for restricted actions.
 - GIVEN an action does not apply to the current workflow or context
 - WHEN the user views the page
 - THEN the action is hidden to reduce clutter
-

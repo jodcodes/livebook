@@ -9,16 +9,15 @@ describe("createProductWorkflows", () => {
       draftInstructions: "Draft indemnity language",
       goal: "Review document consistency",
       question: "What are the risks?",
+      reviewMode: "general",
+      customReviewInstructions: "",
       selectedText: "Selected clause",
-      standardsAvailable: true,
-      benchmarkContractType: "commercial lease",
     });
 
     expect(workflows.map((workflow) => workflow.id)).toEqual([
       "word-review",
       "draft-clause",
       "document-chat",
-      "benchmark-review",
       "associate-project",
       "proofread",
     ]);
@@ -30,14 +29,20 @@ describe("createProductWorkflows", () => {
       draftInstructions: "Draft indemnity language",
       goal: "Review consistency",
       question: "Explain this clause",
+      reviewMode: "custom",
+      customReviewInstructions: "Flag missing assignment consent.",
       selectedText: "Selected text",
-      standardsAvailable: false,
-      benchmarkContractType: "master services agreement",
     });
 
     expect(workflows.find((workflow) => workflow.id === "word-review")?.payload()).toMatchObject({
       document_text: "Current document",
       word_context_available: true,
+      review_mode: "custom",
+      custom_instructions: "Flag missing assignment consent.",
+    });
+    expect(workflows.find((workflow) => workflow.id === "draft-clause")?.payload()).toMatchObject({
+      document_context: "Current document",
+      selected_text: "Selected text",
     });
     expect(workflows.find((workflow) => workflow.id === "document-chat")?.payload()).toMatchObject({
       question: "Explain this clause",
@@ -46,10 +51,6 @@ describe("createProductWorkflows", () => {
     });
     expect(workflows.find((workflow) => workflow.id === "associate-project")?.payload()).toMatchObject({
       goal: "Review consistency",
-    });
-    expect(workflows.find((workflow) => workflow.id === "benchmark-review")?.payload()).toMatchObject({
-      standards_available: false,
-      contract_type: "master services agreement",
     });
   });
 });

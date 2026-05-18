@@ -2,7 +2,6 @@ export type WorkflowId =
   | "word-review"
   | "draft-clause"
   | "document-chat"
-  | "benchmark-review"
   | "associate-project"
   | "proofread";
 
@@ -11,9 +10,9 @@ export type ProductSuiteContext = {
   draftInstructions: string;
   goal: string;
   question: string;
+  reviewMode: string;
+  customReviewInstructions: string;
   selectedText: string;
-  standardsAvailable: boolean;
-  benchmarkContractType: string;
 };
 
 export type ProductWorkflow = {
@@ -30,9 +29,9 @@ export function createProductWorkflows({
   draftInstructions,
   goal,
   question,
+  reviewMode,
+  customReviewInstructions,
   selectedText,
-  standardsAvailable,
-  benchmarkContractType,
 }: ProductSuiteContext): ProductWorkflow[] {
   return [
     {
@@ -45,6 +44,9 @@ export function createProductWorkflows({
         document_text: documentText,
         actor: "Legal Reviewer",
         word_context_available: true,
+        review_mode: reviewMode,
+        custom_instructions: customReviewInstructions,
+        selected_text: selectedText,
       }),
     },
     {
@@ -55,7 +57,8 @@ export function createProductWorkflows({
       actionLabel: "Draft clause",
       payload: () => ({
         instructions: draftInstructions,
-        document_context: "Master services agreement",
+        document_context: documentText,
+        selected_text: selectedText,
         party_position: "customer",
         jurisdiction: null,
         writing_style: "plain English",
@@ -77,24 +80,8 @@ export function createProductWorkflows({
       }),
     },
     {
-      id: "benchmark-review",
-      title: "Market Benchmarks",
-      description: "Compare terms to market standards and stage benchmark-backed fixes.",
-      iconClass: "ri-bar-chart-grouped-line",
-      actionLabel: "Compare to market",
-      payload: () => ({
-        document_text: documentText,
-        contract_type: benchmarkContractType || null,
-        jurisdiction: "New York",
-        industry: "software",
-        deal_type: benchmarkContractType || "commercial lease",
-        party_position: "tenant",
-        standards_available: standardsAvailable,
-      }),
-    },
-    {
       id: "associate-project",
-      title: "Associate",
+      title: "Projects",
       description: "Plan supervised multi-document legal work with approval gates.",
       iconClass: "ri-node-tree",
       actionLabel: "Plan project",

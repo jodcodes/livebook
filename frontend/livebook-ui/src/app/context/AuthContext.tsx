@@ -1,21 +1,18 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 type UserRole = "business" | "lawyer" | null;
 type View =
-  | "chat"
+  | "ask"
   | "history"
   | "playbook"
   | "versionHistory"
-  | "review"
-  | "tabularReview"
-  | "contractReview"
-  | "drafting"
-  | "documentChat"
-  | "marketBenchmarks"
-  | "associate"
-  | "proofread";
+  | "reviewCenter"
+  | "draft"
+  | "projects"
+  | "legalQueue"
+  | "settings";
 
 export interface PastQuery {
   id: string;
@@ -56,22 +53,58 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const STORAGE_KEY = "livebook.auth.workspace.v1";
+const emptyWorkspaceState = {
+  queries: [] as PastQuery[],
+  escalations: [] as EscalationTicket[],
+};
+
+function readWorkspaceState() {
+  if (typeof window === "undefined") return emptyWorkspaceState;
+  const raw = window.localStorage.getItem(STORAGE_KEY);
+  if (!raw) return emptyWorkspaceState;
+  try {
+    const saved = JSON.parse(raw) as {
+      queries?: PastQuery[];
+      escalations?: EscalationTicket[];
+    };
+    return {
+      queries: Array.isArray(saved.queries) ? saved.queries : [],
+      escalations: Array.isArray(saved.escalations) ? saved.escalations : [],
+    };
+  } catch {
+    window.localStorage.removeItem(STORAGE_KEY);
+    return emptyWorkspaceState;
+  }
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userRole, setUserRole] = useState<UserRole>(null);
-  const [currentView, setCurrentView] = useState<View>("chat");
-  const [queries, setQueries] = useState<PastQuery[]>([]);
-  const [escalations, setEscalations] = useState<EscalationTicket[]>([]);
+  const [currentView, setCurrentView] = useState<View>("ask");
+  const [queries, setQueries] = useState<PastQuery[]>(() => readWorkspaceState().queries);
+  const [escalations, setEscalations] = useState<EscalationTicket[]>(
+    () => readWorkspaceState().escalations
+  );
   const [selectedPlaybookClauseRef, setSelectedPlaybookClauseRef] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        queries,
+        escalations,
+      })
+    );
+  }, [escalations, queries]);
 
   const signIn = useCallback((role: Exclude<UserRole, null>) => {
     setUserRole(role);
-    setCurrentView("chat");
+    setCurrentView("ask");
   }, []);
 
   const signOut = useCallback(() => {
     setUserRole(null);
-    setCurrentView("chat");
+    setCurrentView("ask");
     setSelectedPlaybookClauseRef(null);
   }, []);
 

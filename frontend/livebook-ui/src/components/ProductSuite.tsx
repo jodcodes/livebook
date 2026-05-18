@@ -1,6 +1,6 @@
 "use client";
 
-import { type ChangeEvent, useMemo, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,6 +33,7 @@ type ReviewFinding = {
   status: string;
   confidence: number;
   issue: string;
+  source?: string;
   comment: string;
   redline?: string | null;
   eligible_for_bulk: boolean;
@@ -67,30 +68,6 @@ type ChatAnswer = {
   model_error?: string | null;
 };
 
-type BenchmarkFinding = {
-  id: string;
-  deal_point: string;
-  status: string;
-  explanation: string;
-  prevalence?: number | null;
-  suggested_fix?: string | null;
-  alternatives?: Array<{
-    label: string;
-    prevalence: number;
-    text: string;
-  }>;
-  source_standard?: string;
-  confidence?: string;
-};
-
-type BenchmarkReview = {
-  matched_contract_type?: string | null;
-  filters: string[];
-  findings: BenchmarkFinding[];
-  unavailable_reason?: string | null;
-  dataset_version?: string;
-};
-
 type AgentProject = {
   project_id?: string;
   status?: string;
@@ -116,7 +93,7 @@ type AgentProject = {
   needs_clarification: boolean;
 };
 
-type SavedPanelKind = "reviews" | "precedents" | "standards" | "projects";
+type SavedPanelKind = "reviews" | "precedents" | "projects";
 
 type ProofreadFinding = {
   id: string;
@@ -130,6 +107,7 @@ type ProofreadFinding = {
 const defaultMatterText =
   "This commercial lease has unlimited liability, no audit right, Section 99, FooBar shall comply, and [insert party]. Teh services are unclear.";
 const defaultSelectedText = "Seller may terminate at any time.";
+const ACTIVITY_STORAGE_KEY = "livebook.product.activity.v1";
 
 function confidenceLabel(value: number) {
   return `${Math.round(value * 100)}%`;
@@ -195,21 +173,40 @@ function ReviewResult({
 }) {
   const session = data as { findings?: ReviewFinding[]; status?: string };
   const findings = session.findings ?? [];
+  const [editingFindingId, setEditingFindingId] = useState<string | null>(null);
+  const [editedRedline, setEditedRedline] = useState("");
 
   if (!findings.length) {
     return <EmptyResult label="No review findings yet." />;
   }
+
+  const redlineFindings = findings.filter((finding) => finding.redline);
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         <StatusBadge tone="accent">{session.status ?? "review ready"}</StatusBadge>
         <StatusBadge tone="neutral">{findings.length} findings</StatusBadge>
+        <StatusBadge tone="info">{redlineFindings.length} proposed changes</StatusBadge>
         <Button type="button" size="sm" variant="secondary" onClick={onBulkApply}>
           <i className="ri-check-double-line" data-icon="inline-start" />
           Bulk-apply high confidence
         </Button>
       </div>
+      {redlineFindings.length ? (
+        <div className="rounded-lg border bg-background p-3">
+          <div className="mb-2 flex items-center gap-2">
+            <StatusBadge tone="warning">Redline summary</StatusBadge>
+          </div>
+          <ul className="space-y-2 text-sm text-muted-foreground">
+            {redlineFindings.map((finding) => (
+              <li key={`summary-${finding.id}`}>
+                {finding.clause_ref}: {finding.severity} · {finding.status} · {finding.issue}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {findings.map((finding) => (
         <div key={finding.id} className="rounded-lg border bg-background p-3">
           <div className="flex flex-wrap items-start justify-between gap-2">
@@ -222,13 +219,20 @@ function ReviewResult({
               <StatusBadge tone={finding.eligible_for_bulk ? "success" : "warning"}>
                 {confidenceLabel(finding.confidence)}
               </StatusBadge>
+              <StatusBadge tone="neutral">{findingCategory(finding)}</StatusBadge>
             </div>
           </div>
+          {finding.source ? <LegalTextPanel className="mt-3">{finding.source}</LegalTextPanel> : null}
           <LegalTextPanel className="mt-3">{finding.comment}</LegalTextPanel>
           {finding.redline ? (
-            <LegalTextPanel className="mt-2 border-emerald-200 bg-emerald-50 text-emerald-950">
-              {finding.redline}
-            </LegalTextPanel>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <LegalTextPanel className="border-amber-200 bg-amber-50 text-amber-950">
+                Before: {finding.source || "Matched clause text"}
+              </LegalTextPanel>
+              <LegalTextPanel className="border-emerald-200 bg-emerald-50 text-emerald-950">
+                After: {finding.redline}
+              </LegalTextPanel>
+            </div>
           ) : null}
           {finding.audit?.length ? (
             <div className="mt-3 flex flex-wrap gap-2">
@@ -262,16 +266,74 @@ function ReviewResult({
               type="button"
               size="sm"
               variant="ghost"
-              onClick={() => onAction?.("Edited", "Suggestion opened for lawyer edits.")}
+              onClick={() => onReviewAction?.(finding.id, "skip")}
+            >
+              <i className="ri-skip-forward-line" data-icon="inline-start" />
+              Skip
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => {
+                setEditingFindingId(finding.id);
+                setEditedRedline(finding.redline ?? "");
+                onAction?.("Editing", `${finding.clause_ref} redline opened for review.`);
+              }}
             >
               <i className="ri-pencil-line" data-icon="inline-start" />
               Edit before apply
             </Button>
           </div>
+          {editingFindingId === finding.id ? (
+            <div className="mt-3 space-y-2 rounded-lg border bg-muted/30 p-3">
+              <label className="block space-y-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                  Edit redline before applying
+                </span>
+                <Textarea
+                  value={editedRedline}
+                  onChange={(event) => setEditedRedline(event.target.value)}
+                  className="min-h-28 resize-none bg-background"
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    onReviewAction?.(finding.id, "apply", editedRedline);
+                    setEditingFindingId(null);
+                  }}
+                >
+                  <i className="ri-check-line" data-icon="inline-start" />
+                  Apply edited redline
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setEditingFindingId(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
       ))}
     </div>
   );
+}
+
+function findingCategory(finding: ReviewFinding) {
+  const text = `${finding.clause_ref} ${finding.issue}`.toLowerCase();
+  if (text.includes("missing")) return "missing term";
+  if (text.includes("unclear") || text.includes("ambiguous")) return "drafting issue";
+  if (text.includes("liability") || finding.severity === "high") return "legal risk";
+  if (text.includes("business")) return "business issue";
+  if (text.includes("inconsistent")) return "inconsistency";
+  return "custom-instruction match";
 }
 
 function DraftResultView({ data, onAction }: { data: unknown; onAction?: (label: string, detail: string) => void }) {
@@ -340,61 +402,6 @@ function ChatResult({ data }: { data: unknown }) {
           </button>
         ))}
       </div>
-    </div>
-  );
-}
-
-function BenchmarkResult({ data, onAction }: { data: unknown; onAction?: (label: string, detail: string) => void }) {
-  const review = data as BenchmarkReview;
-
-  if (review.unavailable_reason) {
-    return <EmptyResult label={review.unavailable_reason} />;
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <StatusBadge tone="accent">{review.matched_contract_type ?? "matched standard"}</StatusBadge>
-        {review.dataset_version ? <StatusBadge tone="info">{review.dataset_version}</StatusBadge> : null}
-        {(review.filters ?? []).map((filter) => (
-          <StatusBadge key={filter} tone="neutral">{filter}</StatusBadge>
-        ))}
-      </div>
-      {(review.findings ?? []).map((finding) => (
-        <div key={finding.id} className="rounded-lg border bg-background p-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="font-medium">{finding.deal_point}</p>
-            <div className="flex gap-2">
-              <StatusBadge tone={statusTone(finding.status)}>{finding.status}</StatusBadge>
-              {finding.prevalence ? <StatusBadge tone="info">{finding.prevalence}% market</StatusBadge> : null}
-              {finding.confidence ? <StatusBadge tone="neutral">{finding.confidence}</StatusBadge> : null}
-            </div>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">{finding.explanation}</p>
-          {finding.source_standard ? (
-            <p className="mt-1 text-xs text-muted-foreground">Standard: {finding.source_standard}</p>
-          ) : null}
-          {finding.alternatives?.length ? (
-            <div className="mt-3 grid gap-2">
-              {finding.alternatives.map((alternative) => (
-                <div key={alternative.label} className="rounded-md border bg-muted/30 p-2 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium">{alternative.label}</span>
-                    <StatusBadge tone="info">{alternative.prevalence}%</StatusBadge>
-                  </div>
-                  <p className="mt-1 text-muted-foreground">{alternative.text}</p>
-                </div>
-              ))}
-            </div>
-          ) : null}
-          {finding.suggested_fix ? (
-            <LegalTextPanel className="mt-3 border-emerald-200 bg-emerald-50 text-emerald-950">
-              {finding.suggested_fix}
-            </LegalTextPanel>
-          ) : null}
-          <ResultActions primary="Stage redline" onAction={onAction} />
-        </div>
-      ))}
     </div>
   );
 }
@@ -475,7 +482,27 @@ function ProofreadResult({ data, onAction }: { data: unknown; onAction?: (label:
             </div>
           </div>
           {finding.suggestion ? <LegalTextPanel className="mt-3">{finding.suggestion}</LegalTextPanel> : null}
-          <ResultActions primary="Apply fix" onAction={onAction} />
+          <div className="flex flex-wrap gap-2 pt-3">
+            <ResultActions primary="Apply fix" onAction={onAction} />
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onAction?.("Ignored", `${finding.kind} ignored for this proofread run.`)}
+            >
+              <i className="ri-eye-off-line" data-icon="inline-start" />
+              Ignore
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => onAction?.("Ignored similar", `All ${finding.kind} findings ignored for this run.`)}
+            >
+              <i className="ri-eye-close-line" data-icon="inline-start" />
+              Ignore all like this
+            </Button>
+          </div>
         </div>
       ))}
     </div>
@@ -532,8 +559,7 @@ function SavedDataPanel({ kind, state }: { kind: SavedPanelKind; state?: ResultS
   const config = {
     reviews: { title: "Saved reviews", key: "sessions", empty: "No saved Word reviews yet." },
     precedents: { title: "Precedent library", key: "documents", empty: "No imported precedents yet." },
-    standards: { title: "Benchmark standards", key: "standards", empty: "No saved benchmark standards yet." },
-    projects: { title: "Associate projects", key: "projects", empty: "No saved associate projects yet." },
+    projects: { title: "Saved projects", key: "projects", empty: "No saved projects yet." },
   }[kind];
   const items = arrayFromPayload(state.data, config.key);
 
@@ -607,8 +633,6 @@ function WorkflowResult({
       return <DraftResultView data={state.data} onAction={onAction} />;
     case "document-chat":
       return <ChatResult data={state.data} />;
-    case "benchmark-review":
-      return <BenchmarkResult data={state.data} onAction={onAction} />;
     case "associate-project":
       return <AssociateResult data={state.data} />;
     case "proofread":
@@ -621,23 +645,38 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
   const [draftInstructions, setDraftInstructions] = useState("Draft an indemnity clause");
   const [goal, setGoal] = useState("Review consistency across financing documents");
   const [question, setQuestion] = useState("make it more buyer-friendly");
+  const [reviewMode, setReviewMode] = useState("general");
+  const [customReviewInstructions, setCustomReviewInstructions] = useState(
+    "Flag any assignment consent gaps and non-mutual remedies."
+  );
   const [selectedText, setSelectedText] = useState(defaultSelectedText);
-  const [standardsAvailable, setStandardsAvailable] = useState(true);
   const [precedentTitle, setPrecedentTitle] = useState("Customer precedent");
   const [precedentText, setPrecedentText] = useState(
     "Supplier shall defend and indemnify Customer from third-party intellectual property claims arising from the Services.\n\nEach party shall protect Confidential Information using reasonable care and use it only to perform this agreement."
   );
-  const [benchmarkName, setBenchmarkName] = useState("Team software MSA standard");
-  const [benchmarkContractType, setBenchmarkContractType] = useState("master services agreement");
-  const [benchmarkLiabilityFix, setBenchmarkLiabilityFix] = useState(
-    "Add a liability cap at 12 months of fees with carveouts for confidentiality, data security, and IP indemnity."
-  );
-  const [benchmarkAuditFix, setBenchmarkAuditFix] = useState(
-    "Add an annual audit right on reasonable notice with confidentiality safeguards."
-  );
   const [results, setResults] = useState<Record<WorkflowId, ResultState>>({} as Record<WorkflowId, ResultState>);
   const [savedData, setSavedData] = useState<Record<SavedPanelKind, ResultState>>({} as Record<SavedPanelKind, ResultState>);
   const [activity, setActivity] = useState<Activity[]>([]);
+  const [activityHydrated, setActivityHydrated] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(ACTIVITY_STORAGE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as Activity[];
+        setActivity(Array.isArray(saved) ? saved.slice(0, 12) : []);
+      }
+    } catch {
+      window.localStorage.removeItem(ACTIVITY_STORAGE_KEY);
+    } finally {
+      setActivityHydrated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!activityHydrated) return;
+    window.localStorage.setItem(ACTIVITY_STORAGE_KEY, JSON.stringify(activity.slice(0, 12)));
+  }, [activity, activityHydrated]);
 
   const workflows = useMemo(
     () =>
@@ -646,11 +685,11 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
         draftInstructions,
         goal,
         question,
+        reviewMode,
+        customReviewInstructions,
         selectedText,
-        standardsAvailable,
-        benchmarkContractType,
       }),
-    [documentText, draftInstructions, goal, question, selectedText, standardsAvailable, benchmarkContractType]
+    [documentText, draftInstructions, goal, question, reviewMode, customReviewInstructions, selectedText]
   );
   const activeWorkflow = workflows.find((workflow) => workflow.id === activeWorkflowId);
   const visibleWorkflows = activeWorkflow ? [activeWorkflow] : workflows;
@@ -694,7 +733,7 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
         detail,
       },
       ...current,
-    ].slice(0, 6));
+    ].slice(0, 12));
   };
 
   const postProductAction = async (workflow: string, payload: Record<string, unknown>) => {
@@ -812,36 +851,20 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
     }
   };
 
-  const saveBenchmarkStandard = async () => {
-    try {
-      const data = await postProductAction("benchmark-standards-save", {
-        name: benchmarkName,
-        contract_type: benchmarkContractType,
-        visibility: "team",
-        liability_fix: benchmarkLiabilityFix,
-        audit_fix: benchmarkAuditFix,
-      });
-      recordActivity("Benchmark standard saved", data.name ?? benchmarkName);
-      await loadSaved("standards", "benchmark-standards-list");
-    } catch (error) {
-      recordActivity("Benchmark save failed", error instanceof Error ? error.message : String(error));
-    }
-  };
-
   const contextDescription =
     activeWorkflowId === "draft-clause"
       ? "Draft from instructions and current matter context."
       : activeWorkflowId === "document-chat"
         ? "Ask against selected text, the active document, and playbook guidance."
         : activeWorkflowId === "associate-project"
-          ? "Plan work across the current document set."
+          ? "Plan supervised project work across the current document set."
             : "Use the active matter text for this workflow.";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
       <PageHeader
         eyebrow="Contract intelligence"
-        title={activeWorkflow?.title ?? "Review, draft, benchmark, and proofread"}
+        title={activeWorkflow?.title ?? "Review, draft, ask, projects, and proofread"}
         description={
           activeWorkflow?.description ??
           "Work directly from the current matter context. Livebook stages legal changes for review instead of applying AI output silently."
@@ -850,8 +873,8 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
           <>
             <StatusBadge tone="accent">Word review</StatusBadge>
             <StatusBadge tone="info">Drafting</StatusBadge>
-            <StatusBadge tone="warning">Market</StatusBadge>
-            <StatusBadge tone="neutral">Associate</StatusBadge>
+            <StatusBadge tone="warning">Ask</StatusBadge>
+            <StatusBadge tone="neutral">Projects</StatusBadge>
           </>
         }
       />
@@ -976,11 +999,40 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
               </>
             ) : null}
 
-            {activeWorkflowId === "word-review" ||
-            activeWorkflowId === "benchmark-review" ||
-            activeWorkflowId === "proofread" ||
-            !activeWorkflowId ? (
+            {activeWorkflowId === "word-review" || activeWorkflowId === "proofread" || !activeWorkflowId ? (
               <>
+                {activeWorkflowId === "word-review" ? (
+                  <div className="space-y-3 rounded-lg border bg-background p-3">
+                    <span className="text-xs font-medium text-muted-foreground">Review mode</span>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {[
+                        ["general", "General Review"],
+                        ["negotiation", "Negotiation Review"],
+                        ["custom", "Custom Review"],
+                      ].map(([value, label]) => (
+                        <Button
+                          key={value}
+                          type="button"
+                          variant={reviewMode === value ? "secondary" : "ghost"}
+                          className="justify-start"
+                          onClick={() => setReviewMode(value)}
+                        >
+                          {label}
+                        </Button>
+                      ))}
+                    </div>
+                    {reviewMode === "custom" ? (
+                      <label className="block space-y-2">
+                        <span className="text-xs font-medium text-muted-foreground">Custom review instructions</span>
+                        <Textarea
+                          value={customReviewInstructions}
+                          onChange={(event) => setCustomReviewInstructions(event.target.value)}
+                          className="min-h-24 resize-none"
+                        />
+                      </label>
+                    ) : null}
+                  </div>
+                ) : null}
                 <label className="block space-y-2">
                   <span className="text-xs font-medium text-muted-foreground">Document text</span>
                   <Textarea
@@ -989,57 +1041,6 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
                     className="min-h-52 resize-none"
                   />
                 </label>
-                {activeWorkflowId === "benchmark-review" ? (
-                  <div className="space-y-3 border-t pt-4">
-                    <Button
-                      type="button"
-                      variant={standardsAvailable ? "default" : "secondary"}
-                      onClick={() => setStandardsAvailable((current) => !current)}
-                      className="w-full justify-start"
-                    >
-                      <i className={standardsAvailable ? "ri-checkbox-circle-line" : "ri-close-circle-line"} data-icon="inline-start" />
-                      {standardsAvailable ? "Market standards available" : "No market standard available"}
-                    </Button>
-                    <span className="text-xs font-medium text-muted-foreground">Custom benchmark standard</span>
-                    <input
-                      value={benchmarkContractType}
-                      onChange={(event) => setBenchmarkContractType(event.target.value)}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                      aria-label="Benchmark contract type"
-                    />
-                    <input
-                      value={benchmarkName}
-                      onChange={(event) => setBenchmarkName(event.target.value)}
-                      className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                      aria-label="Benchmark standard name"
-                    />
-                    <Textarea
-                      value={benchmarkLiabilityFix}
-                      onChange={(event) => setBenchmarkLiabilityFix(event.target.value)}
-                      className="min-h-20 resize-none"
-                      aria-label="Benchmark liability fix"
-                    />
-                    <Textarea
-                      value={benchmarkAuditFix}
-                      onChange={(event) => setBenchmarkAuditFix(event.target.value)}
-                      className="min-h-20 resize-none"
-                      aria-label="Benchmark audit fix"
-                    />
-                    <Button type="button" variant="secondary" className="w-full justify-start" onClick={saveBenchmarkStandard}>
-                      <i className="ri-save-line" data-icon="inline-start" />
-                      Save custom standard
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => loadSaved("standards", "benchmark-standards-list")}
-                    >
-                      <i className="ri-list-check-3" data-icon="inline-start" />
-                      Load benchmark standards
-                    </Button>
-                  </div>
-                ) : null}
                 {activeWorkflowId === "word-review" ? (
                   <>
                     <Button
@@ -1053,9 +1054,6 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
                     </Button>
                     <SavedDataPanel kind="reviews" state={savedData.reviews} />
                   </>
-                ) : null}
-                {activeWorkflowId === "benchmark-review" ? (
-                  <SavedDataPanel kind="standards" state={savedData.standards} />
                 ) : null}
               </>
             ) : null}

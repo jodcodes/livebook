@@ -371,7 +371,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background">
+    <div className="flex h-full flex-col bg-background">
       <header className="legal-hairline shrink-0 border-b bg-card/92 px-5 py-3 backdrop-blur lg:px-6">
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -379,7 +379,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
                 {t("Batch contracts")}
               </p>
-              <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{t("Tabular Review")}</h2>
+              <h2 className="mt-1 text-lg font-semibold tracking-tight text-foreground">{t("Batch Review")}</h2>
               <p className="text-sm text-muted-foreground">
                 {t("Compare negotiated contracts against the current playbook.")}
               </p>

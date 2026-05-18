@@ -3,7 +3,7 @@
 ## Purpose
 Expand Livebook Ask beyond playbook question answering into document-aware, selection-aware, follow-up-capable legal chat.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Context-Aware Questions
 The system SHALL answer questions against selected text, the active document, approved playbook guidance, and prior conversation when those contexts are available.
@@ -85,4 +85,3 @@ The system SHALL support multilingual question and answer flows as product behav
 - WHEN the user asks a question in a supported non-English language
 - THEN the system answers in the user's language
 - AND citations still identify the original source material
-

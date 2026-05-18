@@ -1,9 +1,12 @@
 import type {
   Audience,
+  AgentProject,
   ChatTurn,
   CreateEscalationResponse,
+  DraftResult,
   PlaybookClause,
   ProductReviewSession,
+  ProofreadFinding,
   QuestionResponse,
   TabularReviewSession,
 } from "./types";
@@ -135,6 +138,53 @@ export async function reviewWordProduct(input: {
       document_text: input.documentText,
       actor: input.actor,
       word_context_available: input.wordContextAvailable,
+    }),
+  });
+}
+
+export async function draftClause(input: {
+  instructions: string;
+  documentContext: string;
+  partyPosition?: string;
+  writingStyle?: string;
+}): Promise<DraftResult> {
+  return requestJson<DraftResult>("/product/draft-clause", {
+    method: "POST",
+    body: JSON.stringify({
+      instructions: input.instructions,
+      document_context: input.documentContext,
+      party_position: input.partyPosition || undefined,
+      writing_style: input.writingStyle || undefined,
+    }),
+  });
+}
+
+export async function planProject(input: {
+  goal: string;
+  documentText: string;
+}): Promise<AgentProject> {
+  return requestJson<AgentProject>("/product/associate-project", {
+    method: "POST",
+    body: JSON.stringify({
+      goal: input.goal,
+      workflow: "word_addin_project",
+      documents: [
+        {
+          name: "Word document",
+          text: input.documentText,
+        },
+      ],
+    }),
+  });
+}
+
+export async function runProofread(input: {
+  documentText: string;
+}): Promise<ProofreadFinding[]> {
+  return requestJson<ProofreadFinding[]>("/product/proofread", {
+    method: "POST",
+    body: JSON.stringify({
+      document_text: input.documentText,
     }),
   });
 }

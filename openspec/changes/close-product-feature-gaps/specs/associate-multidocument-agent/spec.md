@@ -3,7 +3,7 @@
 ## Purpose
 Add an associate-style legal agent that can plan and execute supervised review, drafting, and research workflows across multiple documents.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Multi-Document Workspace
 The system SHALL let users create a project workspace containing multiple documents.
@@ -95,4 +95,3 @@ The system SHALL support common multi-document workflows including dataroom revi
 - WHEN the user selects dataroom review, financing documents, disclosure schedules, or employment packages
 - THEN the system pre-populates an appropriate project goal template
 - AND the user can edit it before execution
-

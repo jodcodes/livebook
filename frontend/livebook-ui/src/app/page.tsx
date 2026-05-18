@@ -4,12 +4,13 @@ import { AuthProvider, useAuth } from "./context/AuthContext";
 import SignInView from "../components/SignInView";
 import Sidebar from "../components/Sidebar";
 import ChatbotDashboard from "../components/ChatbotDashboard";
-import LawyerDashboard from "../components/LawyerDashboard";
+import AskWorkspace from "../components/AskWorkspace";
 import PastQueries from "../components/PastQueries";
 import PlaybookRules from "../components/PlaybookRules";
 import PlaybookHistory from "../components/PlaybookHistory";
-import TabularReview from "../components/TabularReview";
 import ProductSuite from "../components/ProductSuite";
+import ReviewCenter from "../components/ReviewCenter";
+import WorkspaceSettings from "../components/WorkspaceSettings";
 import ReviewPage from "./review/page";
 
 function AppShell() {
@@ -21,8 +22,8 @@ function AppShell() {
 
   const renderContent = () => {
     switch (currentView) {
-      case "chat":
-        return <ChatbotDashboard />;
+      case "ask":
+        return <AskWorkspace />;
       case "history":
         return <PastQueries />;
       case "playbook":
@@ -34,24 +35,18 @@ function AppShell() {
             audience={userRole === "lawyer" ? "lawyer" : "business"}
           />
         );
-      case "review":
-        return userRole === "lawyer" ? <ReviewPage /> : <ChatbotDashboard />;
-      case "tabularReview":
-        return <TabularReview userRole={userRole} />;
-      case "contractReview":
-        return <ProductSuite activeWorkflowId="word-review" />;
-      case "drafting":
+      case "reviewCenter":
+        return <ReviewCenter userRole={userRole} />;
+      case "draft":
         return <ProductSuite activeWorkflowId="draft-clause" />;
-      case "documentChat":
-        return <ProductSuite activeWorkflowId="document-chat" />;
-      case "marketBenchmarks":
-        return <ProductSuite activeWorkflowId="benchmark-review" />;
-      case "associate":
+      case "projects":
         return <ProductSuite activeWorkflowId="associate-project" />;
-      case "proofread":
-        return <ProductSuite activeWorkflowId="proofread" />;
+      case "legalQueue":
+        return userRole === "lawyer" ? <ReviewPage /> : <ReviewCenter userRole={userRole} />;
+      case "settings":
+        return <WorkspaceSettings />;
       default:
-        return userRole === "business" ? <ChatbotDashboard /> : <LawyerDashboard />;
+        return <ChatbotDashboard />;
     }
   };
 

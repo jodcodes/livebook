@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { LegalTextPanel, MetricTile, Notice, PremiumEmpty, StatusBadge, statusTone } from "@/components/premium";
 import { cn } from "@/lib/utils";
+import { buildVersionDiffRows, diffWords, type VersionDiffRow } from "@/lib/versionDiff";
 
 const API_BASE = "/api/backend";
 
@@ -39,6 +40,17 @@ interface ReviewClause {
     created_by?: string;
     created_from?: string;
   };
+  history?: ClauseHistoryEntry[];
+}
+
+interface ClauseHistoryEntry {
+  version: number;
+  version_id?: string;
+  previous_version_id?: string;
+  approved_by: string;
+  timestamp: string;
+  action: "edit" | "restore" | string;
+  fields_snapshot?: Partial<ReviewClause>;
 }
 
 interface EscalationActor {
@@ -138,6 +150,74 @@ function clauseDraft(clause: ReviewClause) {
     always_escalate: Boolean(clause.always_escalate),
     keywords: clause.keywords ?? [],
   };
+}
+
+function applyProposedChange(
+  baseDraft: ReturnType<typeof clauseDraft>,
+  proposedChange?: Record<string, unknown>
+) {
+  if (!proposedChange) return baseDraft;
+
+  const next = {
+    ...baseDraft,
+    positions: { ...baseDraft.positions },
+    keywords: [...(baseDraft.keywords ?? [])],
+  };
+
+  if (typeof proposedChange.name === "string") {
+    next.name = proposedChange.name;
+  }
+  if (typeof proposedChange.red_line === "string") {
+    next.red_line = proposedChange.red_line;
+  }
+  if (typeof proposedChange.escalation_trigger === "string") {
+    next.escalation_trigger = proposedChange.escalation_trigger;
+  }
+  if (typeof proposedChange.always_escalate === "boolean") {
+    next.always_escalate = proposedChange.always_escalate;
+  }
+  if (Array.isArray(proposedChange.keywords)) {
+    next.keywords = proposedChange.keywords
+      .map((item) => String(item).trim())
+      .filter(Boolean);
+  }
+
+  const positions = proposedChange.positions;
+  if (positions && typeof positions === "object" && !Array.isArray(positions)) {
+    for (const field of ["preferred", "fallback_1", "fallback_2"] as const) {
+      const value = (positions as Record<string, unknown>)[field];
+      if (typeof value === "string") {
+        next.positions[field] = value;
+      }
+    }
+  }
+
+  return next;
+}
+
+function previousClauseSnapshot(clause: ReviewClause) {
+  return clause.history?.at(-1)?.fields_snapshot ?? null;
+}
+
+function changedDraftRows(
+  clause: ReviewClause,
+  draft: ReturnType<typeof clauseDraft>,
+  t: (key: string) => string
+) {
+  const rows = buildVersionDiffRows(previousClauseSnapshot(clause), draft);
+  const localizeValue = (value: string) => {
+    if (value === "Not set" || value === "Yes" || value === "No") {
+      return t(value);
+    }
+    return value;
+  };
+
+  return rows.map((row) => ({
+    ...row,
+    field: t(row.field),
+    from: localizeValue(row.from),
+    to: localizeValue(row.to),
+  }));
 }
 
 function actorName(actor: EscalationActor, t: (key: string) => string) {
@@ -252,10 +332,13 @@ export default function ReviewPage() {
       setEvolveSuggestions(evolveList);
       setDrafts(
         Object.fromEntries(
-          clauseList.map((clause) => [
-            clause.clause_id,
-            JSON.stringify(clauseDraft(clause)),
-          ])
+          clauseList.map((clause) => {
+            const suggestion = evolveList.find((item) => item.clause_id === clause.clause_id);
+            return [
+              clause.clause_id,
+              JSON.stringify(applyProposedChange(clauseDraft(clause), suggestion?.proposed_change)),
+            ];
+          })
         )
       );
       setError(null);
@@ -420,10 +503,17 @@ export default function ReviewPage() {
 
   async function decline(clauseId: string) {
     try {
-      await apiJson(`/playbook/${encodeURIComponent(clauseId)}/decline`, {
-        method: "POST",
-        body: JSON.stringify({ declined_by: "lawyer" }),
-      });
+      const suggestion = evolveSuggestions.find((item) => item.clause_id === clauseId);
+      if (suggestion) {
+        await apiJson(`/evolve/${encodeURIComponent(suggestion.id)}/reject`, {
+          method: "POST",
+        });
+      } else {
+        await apiJson(`/playbook/${encodeURIComponent(clauseId)}/decline`, {
+          method: "POST",
+          body: JSON.stringify({ declined_by: "lawyer" }),
+        });
+      }
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -469,9 +559,9 @@ export default function ReviewPage() {
         <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
               <p className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-livebook-dark">
-              {t("Human-in-the-loop")}
+              {t("Legal approval")}
             </p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("Review Queue")}</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight">{t("Legal Queue")}</h1>
             <p className="text-sm text-muted-foreground">
               {items.length === 0
                 ? t("No open review items")
@@ -566,6 +656,7 @@ export default function ReviewPage() {
                 <ClauseReview
                   clause={activeItem.clause}
                   draft={draftFor(activeItem.clause)}
+                  diffRows={changedDraftRows(activeItem.clause, draftFor(activeItem.clause), t)}
                   updateDraft={updateDraft}
                   onApprove={() => approve(activeItem.clause)}
                   onDecline={() => decline(activeItem.clause.clause_id)}
@@ -747,6 +838,7 @@ function EscalationReview({
 function ClauseReview({
   clause,
   draft,
+  diffRows,
   updateDraft,
   onApprove,
   onDecline,
@@ -755,6 +847,7 @@ function ClauseReview({
 }: {
   clause: ReviewClause;
   draft: ReturnType<typeof clauseDraft>;
+  diffRows: VersionDiffRow[];
   updateDraft: (
     clauseId: string,
     updater: (draft: ReturnType<typeof clauseDraft>) => ReturnType<typeof clauseDraft>
@@ -769,6 +862,22 @@ function ClauseReview({
       <div className="mb-4 text-xs font-semibold text-muted-foreground">
         {t("Version")} {clause.meta?.version ?? 1}
       </div>
+
+      <section className="mb-5 rounded-lg border bg-card">
+        <div className="border-b px-4 py-3">
+          <h3 className="text-sm font-semibold">{t("Proposed changes")}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {t("Review the previous and new clause content for each changed field.")}
+          </p>
+        </div>
+        <div className="space-y-3 p-4">
+          {diffRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">{t("No field changes detected.")}</p>
+          ) : (
+            diffRows.map((row) => <ReviewDiffRow key={row.field} row={row} />)
+          )}
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <label className="text-xs font-semibold text-muted-foreground">
@@ -868,5 +977,55 @@ function ClauseReview({
         </Button>
       </div>
     </>
+  );
+}
+
+function ReviewDiffRow({ row }: { row: VersionDiffRow }) {
+  const { t } = useLocale();
+  const diff = diffWords(row.from, row.to);
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-border bg-background">
+      <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
+        <h4 className="text-sm font-semibold text-foreground">{row.field}</h4>
+        <span className="rounded bg-amber-50 px-2 py-1 text-xs font-semibold text-amber-700">
+          {t("Changed")}
+        </span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2">
+        <div className="border-b p-4 md:border-r md:border-b-0">
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-red-500" />
+            {t("Previous")}
+          </p>
+          <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/90">
+            {diff.removed.map((part, index) => (
+              <span
+                key={`${part.token}-${index}`}
+                className={part.changed ? "rounded bg-red-50 px-1 text-red-700 line-through" : undefined}
+              >
+                {part.token}
+              </span>
+            ))}
+          </p>
+        </div>
+        <div className="p-4">
+          <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
+            {t("New")}
+          </p>
+          <p className="whitespace-pre-wrap text-sm leading-7 text-foreground/90">
+            {diff.added.map((part, index) => (
+              <span
+                key={`${part.token}-${index}`}
+                className={part.changed ? "rounded bg-emerald-50 px-1 text-emerald-700" : undefined}
+              >
+                {part.token}
+              </span>
+            ))}
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }

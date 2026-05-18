@@ -105,6 +105,64 @@ export interface ProductReviewSession {
   findings: ProductReviewFinding[];
 }
 
+export interface ClauseLibraryItem {
+  id: string;
+  title: string;
+  clause_type: string;
+  text: string;
+  visibility: string;
+  source: string;
+}
+
+export interface DraftResult {
+  content: string;
+  assumptions: string[];
+  sources: string[];
+  library_matches: ClauseLibraryItem[];
+  review_notes: string[];
+  generation_mode: string;
+  model_error?: string | null;
+  available_actions: string[];
+}
+
+export interface DocumentSummary {
+  name: string;
+  detected_parties: string[];
+  detected_dates: string[];
+  detected_defined_terms: string[];
+}
+
+export interface ProjectUpdate {
+  id: string;
+  target_documents: string[];
+  change_type: string;
+  current_value: string;
+  suggested_value: string;
+  approval_required: boolean;
+}
+
+export interface AgentProject {
+  project_id: string;
+  status: string;
+  task_plan: string[];
+  suggestions: string[];
+  open_issues: string[];
+  next_actions: string[];
+  document_summaries: DocumentSummary[];
+  proposed_updates: ProjectUpdate[];
+  completed_tasks: string[];
+  needs_clarification: boolean;
+}
+
+export interface ProofreadFinding {
+  id: string;
+  kind: string;
+  status: string;
+  message: string;
+  suggestion?: string | null;
+  confidence: number;
+}
+
 export interface CreateEscalationResponse {
   item: {
     id: string;

@@ -3,7 +3,7 @@
 ## Purpose
 Add a final cleanup workflow that finds drafting and consistency issues separately from legal-risk review.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Separate Proofread Workflow
 The system SHALL provide proofread as a separate workflow from legal-risk review.
@@ -82,4 +82,3 @@ The system SHALL let users apply cleanup fixes selectively.
 - WHEN the finding is displayed
 - THEN it is labeled low-confidence
 - AND it is not included in any default bulk apply selection
-

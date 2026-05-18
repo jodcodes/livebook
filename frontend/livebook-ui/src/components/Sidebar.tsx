@@ -12,17 +12,14 @@ import { StatusBadge } from "@/components/premium";
 import { cn } from "@/lib/utils";
 
 const baseNavItems = [
-  { iconClass: "ri-message-3-line", label: "Current Chat", view: "chat" as const },
-  { iconClass: "ri-history-line", label: "Past Queries", view: "history" as const },
+  { iconClass: "ri-chat-3-line", label: "Ask", view: "ask" as const },
+  { iconClass: "ri-file-search-line", label: "Review", view: "reviewCenter" as const },
+  { iconClass: "ri-quill-pen-line", label: "Draft", view: "draft" as const },
+  { iconClass: "ri-node-tree", label: "Projects", view: "projects" as const },
   { iconClass: "ri-book-open-line", label: "Playbook Rules", view: "playbook" as const },
   { iconClass: "ri-git-branch-line", label: "Version History", view: "versionHistory" as const },
-  { iconClass: "ri-table-line", label: "Tabular Review", view: "tabularReview" as const },
-  { iconClass: "ri-file-search-line", label: "Review", view: "contractReview" as const },
-  { iconClass: "ri-quill-pen-line", label: "Draft", view: "drafting" as const },
-  { iconClass: "ri-chat-3-line", label: "Ask", view: "documentChat" as const },
-  { iconClass: "ri-bar-chart-grouped-line", label: "Market", view: "marketBenchmarks" as const },
-  { iconClass: "ri-node-tree", label: "Associate", view: "associate" as const },
-  { iconClass: "ri-check-double-line", label: "Proofread", view: "proofread" as const },
+  { iconClass: "ri-history-line", label: "History", view: "history" as const },
+  { iconClass: "ri-settings-3-line", label: "Settings", view: "settings" as const },
 ];
 
 export default function Sidebar() {
@@ -32,7 +29,10 @@ export default function Sidebar() {
 
   const navItems =
     userRole === "lawyer"
-      ? [...baseNavItems, { iconClass: "ri-flow-chart", label: "Review Queue", view: "review" as const }]
+      ? [
+          { iconClass: "ri-flow-chart", label: "Legal Queue", view: "legalQueue" as const },
+          ...baseNavItems,
+        ]
       : baseNavItems;
   const roleLabel = userRole === "business" ? t("Business User") : t("Legal Counsel");
   const roleIconClass = userRole === "business" ? "ri-briefcase-line" : "ri-scales-line";

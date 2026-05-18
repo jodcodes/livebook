@@ -3,7 +3,7 @@
 ## Purpose
 Provide a complete Word-native contract review workflow that turns Livebook review findings into user-approved comments and redlines while preserving existing tabular review behavior.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Full-Document Review From Word
 The system SHALL let a user run a review against the active Microsoft Word document or a supported uploaded contract and return review findings for the reviewed document.
@@ -108,4 +108,3 @@ The system SHALL keep existing Livebook tabular review behavior compatible with 
 - WHEN the Word review workflow is added
 - THEN the user can still open and use the tabular review session
 - AND tabular review rows can still be used as a source for Word comments or redlines where currently supported
-

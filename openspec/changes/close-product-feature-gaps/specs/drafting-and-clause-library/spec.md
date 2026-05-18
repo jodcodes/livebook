@@ -3,7 +3,7 @@
 ## Purpose
 Add drafting and reusable clause-library workflows beyond current playbook rule management.
 
-## Requirements
+## ADDED Requirements
 
 ### Requirement: Clause Drafting
 The system SHALL generate new clause language from user intent, document context, party position, jurisdiction, and writing style when those inputs are provided.
@@ -107,4 +107,3 @@ The system SHALL reuse preferred language from approved playbook clauses and rel
 - WHEN the user generates clause language
 - THEN the system uses the approved preferred position as grounding
 - AND the draft cites the playbook clause as a source
-
