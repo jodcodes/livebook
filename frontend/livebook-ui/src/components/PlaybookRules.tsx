@@ -80,6 +80,19 @@ interface PlaybookRulesProps {
   readOnly?: boolean;
 }
 
+type PendingAction = {
+  title: string;
+  detail: string;
+  confirmLabel?: string;
+  run: () => Promise<void> | void;
+};
+
+type UndoAction = {
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -111,6 +124,10 @@ function clauseDraft(clause: Clause): ClauseDraft {
     always_escalate: Boolean(clause.always_escalate),
     keywords: clause.keywords ?? [],
   };
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function normalizeClauseRef(value: string) {
@@ -226,6 +243,8 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -251,6 +270,8 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
       setSelectedClause(clause);
       setDraft(clauseDraft(clause));
       setNotice(null);
+      setPendingAction(null);
+      setUndoAction(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -376,7 +397,78 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
     );
   }
 
-  async function saveDraft() {
+  function stageAction(action: PendingAction) {
+    setUndoAction(null);
+    setPendingAction(action);
+  }
+
+  function confirmPendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    setPendingAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  function cancelPendingAction() {
+    if (pendingAction) {
+      setNotice(t("Action canceled."));
+    }
+    setPendingAction(null);
+  }
+
+  function undoLastAction() {
+    const action = undoAction;
+    if (!action) return;
+    setUndoAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  function resetDraft() {
+    if (readOnly || !selectedClause || !draft) return;
+    const previousDraft = cloneJson(draft);
+    stageAction({
+      title: t("Reset draft"),
+      detail: t("Review reset before replacing unsaved fields with the last saved clause."),
+      run: () => {
+        setDraft(clauseDraft(selectedClause));
+        setNotice(t("Draft reset."));
+        setUndoAction({
+          title: t("Undo reset"),
+          detail: t("Restore the unsaved fields from before reset."),
+          run: () => {
+            setDraft(previousDraft);
+            setNotice(t("Reset undone."));
+          },
+        });
+      },
+    });
+  }
+
+  async function restoreClause(previousClause: Clause) {
+    setIsSaving(true);
+    setNotice(null);
+    try {
+      const restored = await apiJson<Clause>(
+        `/playbook/${encodeURIComponent(previousClause.clause_id)}/restore-snapshot`,
+        {
+          method: "POST",
+          body: JSON.stringify(previousClause),
+        }
+      );
+      setSelectedClause(restored);
+      setDraft(clauseDraft(restored));
+      setNotice(t("Clause restored."));
+      await refresh();
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function commitDraft(previousClause: Clause) {
     if (readOnly || !selectedClause || !draft) return;
     setIsSaving(true);
     setNotice(null);
@@ -391,6 +483,11 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
       setSelectedClause(updated);
       setDraft(clauseDraft(updated));
       setNotice(t("Clause updated."));
+      setUndoAction({
+        title: t("Undo save"),
+        detail: t("Restore this clause to the previous saved fields."),
+        run: () => restoreClause(previousClause),
+      });
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -399,7 +496,19 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
     }
   }
 
+  function saveDraft() {
+    if (readOnly || !selectedClause || !draft) return;
+    const previousClause = cloneJson(selectedClause);
+    stageAction({
+      title: t("Save clause"),
+      detail: t("Review changed playbook fields before writing them to the backend."),
+      confirmLabel: t("Confirm"),
+      run: () => commitDraft(previousClause),
+    });
+  }
+
   const draftLawTypeValue = draft?.law_type || "__unassigned";
+  const formLocked = readOnly || Boolean(pendingAction);
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -580,14 +689,15 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       <Button
                         type="button"
                         variant="outline"
-                        onClick={() => setDraft(clauseDraft(selectedClause))}
+                        onClick={resetDraft}
+                        disabled={Boolean(pendingAction)}
                       >
                         {t("Reset")}
                       </Button>
                       <Button
                         type="button"
                         onClick={saveDraft}
-                        disabled={isSaving}
+                        disabled={isSaving || Boolean(pendingAction)}
                       >
                         {isSaving ? `${t("Save")}...` : t("Save")}
                       </Button>
@@ -595,6 +705,37 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                   )}
                 </div>
                 {notice ? <Notice tone="success" className="mt-4">{notice}</Notice> : null}
+                {pendingAction ? (
+                  <Notice tone="warning" title={t("Confirm action")} className="mt-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{pendingAction.title}</p>
+                        <p>{pendingAction.detail}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <Button type="button" size="sm" onClick={confirmPendingAction}>
+                          {pendingAction.confirmLabel ?? t("Confirm")}
+                        </Button>
+                        <Button type="button" size="sm" variant="ghost" onClick={cancelPendingAction}>
+                          {t("Cancel")}
+                        </Button>
+                      </div>
+                    </div>
+                  </Notice>
+                ) : null}
+                {!pendingAction && undoAction ? (
+                  <Notice tone="success" title={t("Action confirmed")} className="mt-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="font-medium text-foreground">{undoAction.title}</p>
+                        <p>{undoAction.detail}</p>
+                      </div>
+                      <Button type="button" size="sm" variant="secondary" onClick={undoLastAction}>
+                        {t("Undo")}
+                      </Button>
+                    </div>
+                  </Notice>
+                ) : null}
               </Panel>
 
               <Panel>
@@ -604,7 +745,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                     <Input
                       value={draft.name ?? ""}
                       onChange={(event) => updateDraftField("name", event.target.value)}
-                      readOnly={readOnly}
+                      readOnly={formLocked}
                     />
                   </Field>
                   <Field>
@@ -614,7 +755,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                     <Input
                       value={draft.clause_type ?? ""}
                       onChange={(event) => updateDraftField("clause_type", event.target.value)}
-                      readOnly={readOnly}
+                      readOnly={formLocked}
                     />
                   </Field>
                   <Field>
@@ -624,7 +765,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       onValueChange={(value) =>
                         updateDraftField("law_type", value === "__unassigned" ? "" : value)
                       }
-                      disabled={readOnly}
+                      disabled={formLocked}
                     >
                       <SelectTrigger className="w-full">
                         <SelectValue />
@@ -654,7 +795,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                             .filter(Boolean)
                         )
                       }
-                      readOnly={readOnly}
+                      readOnly={formLocked}
                     />
                   </Field>
                   {(["preferred", "fallback_1", "fallback_2"] as const).map((field) => (
@@ -663,7 +804,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       <Textarea
                         value={draft.positions?.[field] ?? ""}
                         onChange={(event) => updatePositionField(field, event.target.value)}
-                        readOnly={readOnly}
+                        readOnly={formLocked}
                         className="min-h-28"
                       />
                     </Field>
@@ -673,7 +814,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                     <Textarea
                       value={draft.red_line ?? ""}
                       onChange={(event) => updateDraftField("red_line", event.target.value)}
-                      readOnly={readOnly}
+                      readOnly={formLocked}
                       className="min-h-28"
                     />
                   </Field>
@@ -684,7 +825,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       onChange={(event) =>
                         updateDraftField("escalation_trigger", event.target.value)
                       }
-                      readOnly={readOnly}
+                      readOnly={formLocked}
                       className="min-h-24"
                     />
                   </Field>
@@ -694,7 +835,7 @@ export default function PlaybookRules({ readOnly = false }: PlaybookRulesProps) 
                       onCheckedChange={(checked) =>
                         updateDraftField("always_escalate", checked === true)
                       }
-                      disabled={readOnly}
+                      disabled={formLocked}
                     />
                     <FieldContent>
                       <FieldTitle>{t("Always escalate")}</FieldTitle>

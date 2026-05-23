@@ -125,6 +125,18 @@ type ReviewItem =
       escalation: EscalationItem;
     };
 
+type PendingAction = {
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
+type UndoAction = {
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -160,6 +172,10 @@ function clauseDraft(clause: ReviewClause) {
     always_escalate: Boolean(clause.always_escalate),
     keywords: clause.keywords ?? [],
   };
+}
+
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
 }
 
 function applyProposedChange(
@@ -328,6 +344,8 @@ export default function ReviewPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -488,7 +506,57 @@ export default function ReviewPage() {
     });
   }
 
-  async function approve(clause: ReviewClause) {
+  function stageAction(action: PendingAction) {
+    setUndoAction(null);
+    setPendingAction(action);
+  }
+
+  function confirmPendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    setPendingAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  function cancelPendingAction() {
+    setPendingAction(null);
+  }
+
+  function undoLastAction() {
+    const action = undoAction;
+    if (!action) return;
+    setUndoAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  async function restoreClauseSnapshot(clause: ReviewClause) {
+    await apiJson(`/playbook/${encodeURIComponent(clause.clause_id)}/restore-snapshot`, {
+      method: "POST",
+      body: JSON.stringify(clause),
+    });
+    await recordQueueWriteback("Undo", `Clause ${clause.clause_id} restored from Legal Queue.`);
+    await refresh();
+  }
+
+  async function restoreEvolveSuggestion(suggestionId: string) {
+    await apiJson(`/evolve/${encodeURIComponent(suggestionId)}/restore`, {
+      method: "POST",
+    });
+  }
+
+  async function restoreClauseAndSuggestion(clause: ReviewClause, suggestionId?: string) {
+    await restoreClauseSnapshot(clause);
+    if (suggestionId) {
+      await restoreEvolveSuggestion(suggestionId);
+      await refresh();
+    }
+  }
+
+  async function executeApprove(clause: ReviewClause, previousClause: ReviewClause) {
     try {
       const suggestion = evolveSuggestions.find((item) => item.clause_id === clause.clause_id);
       if (suggestion) {
@@ -505,6 +573,11 @@ export default function ReviewPage() {
         });
       }
       await recordQueueWriteback("Approved", `Clause ${clause.clause_id} approved from Legal Queue.`);
+      setUndoAction({
+        title: t("Undo approval"),
+        detail: t("Restore this clause to the state before approval."),
+        run: () => restoreClauseAndSuggestion(previousClause, suggestion?.id),
+      });
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -512,7 +585,16 @@ export default function ReviewPage() {
     }
   }
 
-  async function decline(clauseId: string) {
+  function approve(clause: ReviewClause) {
+    const previousClause = cloneJson(clause);
+    stageAction({
+      title: t("Approve"),
+      detail: t("Review and confirm before approving this Legal Queue item."),
+      run: () => executeApprove(clause, previousClause),
+    });
+  }
+
+  async function executeDecline(clauseId: string, previousClause?: ReviewClause) {
     try {
       const suggestion = evolveSuggestions.find((item) => item.clause_id === clauseId);
       if (suggestion) {
@@ -526,6 +608,13 @@ export default function ReviewPage() {
         });
       }
       await recordQueueWriteback("Declined", `Clause ${clauseId} declined from Legal Queue.`);
+      if (previousClause) {
+        setUndoAction({
+          title: t("Undo rejection"),
+          detail: t("Restore this clause to the state before rejection."),
+          run: () => restoreClauseAndSuggestion(previousClause, suggestion?.id),
+        });
+      }
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -533,7 +622,25 @@ export default function ReviewPage() {
     }
   }
 
-  async function resolveEscalation(id: string) {
+  function decline(clause: ReviewClause) {
+    const previousClause = cloneJson(clause);
+    stageAction({
+      title: t("Reject"),
+      detail: t("Review and confirm before rejecting this Legal Queue item."),
+      run: () => executeDecline(clause.clause_id, previousClause),
+    });
+  }
+
+  async function restoreEscalationItem(item: EscalationItem) {
+    await apiJson(`/escalations/${encodeURIComponent(item.id)}/restore`, {
+      method: "POST",
+      body: JSON.stringify({ item }),
+    });
+    await recordQueueWriteback("Undo", `Escalation ${item.id} restored to Legal Queue.`);
+    await refresh();
+  }
+
+  async function executeResolveEscalation(id: string, previousItem: EscalationItem) {
     try {
       const reviewer = localReviewer();
       await apiJson(`/escalations/${encodeURIComponent(id)}/resolve`, {
@@ -543,6 +650,11 @@ export default function ReviewPage() {
         }),
       });
       await recordQueueWriteback("Resolved", `Escalation ${id} resolved from Legal Queue.`);
+      setUndoAction({
+        title: t("Undo approval"),
+        detail: t("Restore this escalation to the review queue."),
+        run: () => restoreEscalationItem(previousItem),
+      });
       await refresh();
       setDetailOpen(false);
     } catch (err) {
@@ -550,7 +662,16 @@ export default function ReviewPage() {
     }
   }
 
-  async function declineEscalation(id: string) {
+  function resolveEscalation(item: EscalationItem) {
+    const previousItem = cloneJson(item);
+    stageAction({
+      title: t("Approve"),
+      detail: t("Review and confirm before resolving this escalation."),
+      run: () => executeResolveEscalation(item.id, previousItem),
+    });
+  }
+
+  async function executeDeclineEscalation(id: string, previousItem: EscalationItem) {
     try {
       const reviewer = localReviewer();
       await apiJson(`/escalations/${encodeURIComponent(id)}/decline`, {
@@ -560,11 +681,25 @@ export default function ReviewPage() {
         }),
       });
       await recordQueueWriteback("Declined", `Escalation ${id} declined from Legal Queue.`);
+      setUndoAction({
+        title: t("Undo rejection"),
+        detail: t("Restore this escalation to the review queue."),
+        run: () => restoreEscalationItem(previousItem),
+      });
       await refresh();
       setDetailOpen(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function declineEscalation(item: EscalationItem) {
+    const previousItem = cloneJson(item);
+    stageAction({
+      title: t("Reject"),
+      detail: t("Review and confirm before declining this escalation."),
+      run: () => executeDeclineEscalation(item.id, previousItem),
+    });
   }
 
   async function recordQueueWriteback(label: string, detail: string) {
@@ -627,6 +762,37 @@ export default function ReviewPage() {
         </header>
 
         {error && <Notice tone="danger" className="mb-4">{error}</Notice>}
+        {pendingAction ? (
+          <Notice tone="warning" title={t("Confirm action")} className="mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-foreground">{pendingAction.title}</p>
+                <p>{pendingAction.detail}</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={confirmPendingAction}>
+                  {t("Confirm")}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={cancelPendingAction}>
+                  {t("Cancel")}
+                </Button>
+              </div>
+            </div>
+          </Notice>
+        ) : null}
+        {!pendingAction && undoAction ? (
+          <Notice tone="success" title={t("Action confirmed")} className="mb-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-foreground">{undoAction.title}</p>
+                <p>{undoAction.detail}</p>
+              </div>
+              <Button type="button" size="sm" variant="secondary" onClick={undoLastAction}>
+                {t("Undo")}
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
 
         {isLoading && items.length === 0 ? (
           <Notice tone="neutral">{t("Loading review queue...")}</Notice>
@@ -674,8 +840,8 @@ export default function ReviewPage() {
               {activeItem.type === "escalation" ? (
                 <EscalationReview
                   escalation={activeItem.escalation}
-                  onApprove={() => resolveEscalation(activeItem.escalation.id)}
-                  onDecline={() => declineEscalation(activeItem.escalation.id)}
+                  onApprove={() => resolveEscalation(activeItem.escalation)}
+                  onDecline={() => declineEscalation(activeItem.escalation)}
                   t={t}
                   formatEnumLabel={formatEnumLabel}
                 />
@@ -686,7 +852,7 @@ export default function ReviewPage() {
                   diffRows={changedDraftRows(activeItem.clause, draftFor(activeItem.clause), t)}
                   updateDraft={updateDraft}
                   onApprove={() => approve(activeItem.clause)}
-                  onDecline={() => decline(activeItem.clause.clause_id)}
+                  onDecline={() => decline(activeItem.clause)}
                   t={t}
                   formatEnumLabel={formatEnumLabel}
                 />

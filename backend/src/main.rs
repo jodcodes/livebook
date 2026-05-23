@@ -25,9 +25,11 @@ use routes::{
     post_precedent_list, post_precedent_upload, post_precedent_upload_file, post_proofread,
     post_question, post_tabular_review, post_tabular_review_text, post_word_review,
     post_word_review_action, post_word_review_actions, post_word_review_bulk_apply,
-    post_word_review_list, post_workspace_activity_append, post_workspace_activity_list,
-    post_workspace_settings_get, post_workspace_settings_save, reject_email_queue, reject_evolve,
-    resolve_escalation, restore_clause_version, run_email_processing_loop, run_evolve_analysis,
+    post_word_review_list, post_word_review_restore, post_workspace_activity_append,
+    post_workspace_activity_list, post_workspace_settings_get, post_workspace_settings_save,
+    reject_email_queue, reject_evolve, resolve_escalation, restore_clause_snapshot,
+    restore_clause_version, restore_escalation, restore_evolve, restore_playbook_version,
+    restore_tabular_review_insights, run_email_processing_loop, run_evolve_analysis,
 };
 use std::net::SocketAddr;
 use tracing::info;
@@ -69,6 +71,10 @@ async fn main() {
             "/playbooks/{playbook_id}/versions/{version_id}",
             get(get_playbook_version_detail),
         )
+        .route(
+            "/playbooks/{playbook_id}/versions/{version_id}/restore",
+            post(restore_playbook_version),
+        )
         .route("/playbook/review", get(get_playbook_review))
         .route("/playbook/history", get(get_playbook_history))
         .route(
@@ -93,6 +99,10 @@ async fn main() {
             post(restore_clause_version),
         )
         .route(
+            "/playbook/{clause_id}/restore-snapshot",
+            post(restore_clause_snapshot),
+        )
+        .route(
             "/playbook/uploads/{draft_id}/confirm",
             post(confirm_playbook_upload_draft),
         )
@@ -101,6 +111,7 @@ async fn main() {
         .route("/evolve", get(get_evolve))
         .route("/evolve/{id}/approve", post(approve_evolve))
         .route("/evolve/{id}/reject", post(reject_evolve))
+        .route("/evolve/{id}/restore", post(restore_evolve))
         .route("/email/ingest", post(ingest_email))
         .route("/email/queue", get(get_email_queue))
         .route("/email/queue/{id}/approve", post(approve_email_queue))
@@ -115,6 +126,10 @@ async fn main() {
             "/tabular-review/{session_id}/apply-insights",
             post(apply_tabular_review_insights),
         )
+        .route(
+            "/tabular-review/{session_id}/restore-insights",
+            post(restore_tabular_review_insights),
+        )
         .route("/product/word-review", post(post_word_review))
         .route("/product/word-review/list", post(post_word_review_list))
         .route(
@@ -125,6 +140,10 @@ async fn main() {
         .route(
             "/product/word-review/bulk-apply",
             post(post_word_review_bulk_apply),
+        )
+        .route(
+            "/product/word-review/restore",
+            post(post_word_review_restore),
         )
         .route("/product/draft-clause", post(post_draft_clause))
         .route(
@@ -175,6 +194,7 @@ async fn main() {
         .route("/escalations", get(get_escalations).post(create_escalation))
         .route("/escalations/{id}/resolve", post(resolve_escalation))
         .route("/escalations/{id}/decline", post(decline_escalation))
+        .route("/escalations/{id}/restore", post(restore_escalation))
         .merge(SwaggerUi::new("/swagger-ui").url("/api-doc/openapi.json", ApiDoc::openapi()));
 
     let addr = SocketAddr::from((config.backend_host, config.backend_port));

@@ -108,6 +108,25 @@ pub async fn update_chat_query_review(
     Ok(())
 }
 
+pub async fn restore_chat_query_escalation(
+    query_id: Option<&str>,
+    escalation_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    let mut queries = read_chat_queries().await?;
+    let query = queries.iter_mut().find(|query| {
+        query_id
+            .filter(|id| !id.trim().is_empty())
+            .is_some_and(|id| query.id == id)
+            || query.escalation_id.as_deref() == Some(escalation_id)
+    });
+
+    if let Some(query) = query {
+        restore_escalation_review_state(query, escalation_id);
+        write_chat_queries(&queries).await?;
+    }
+    Ok(())
+}
+
 fn build_chat_query_item(input: CreateChatQuery, created_at: String) -> ChatQueryItem {
     let session_id = input
         .session_id
@@ -148,6 +167,13 @@ fn apply_review_status(
     query.status = status.to_string();
     query.reviewed_at = Some(reviewed_at);
     query.reviewed_by = Some(reviewed_by);
+}
+
+fn restore_escalation_review_state(query: &mut ChatQueryItem, escalation_id: &str) {
+    query.status = "escalated".to_string();
+    query.escalation_id = Some(escalation_id.to_string());
+    query.reviewed_at = None;
+    query.reviewed_by = None;
 }
 
 fn default_chat_actor() -> ChatQueryActor {
@@ -280,5 +306,30 @@ mod tests {
             query.reviewed_by.map(|actor| actor.display_name),
             Some("Legal Counsel".to_string())
         );
+    }
+
+    #[test]
+    fn escalation_restore_clears_lawyer_review_decision() {
+        let mut query = build_chat_query_item(input(true), "2026-04-25T12:00:00Z".to_string());
+        let reviewer = ChatQueryActor {
+            user_id: "lawyer".to_string(),
+            display_name: "Legal Counsel".to_string(),
+            email: "legal.counsel@livebook.com".to_string(),
+            role: "lawyer".to_string(),
+        };
+        apply_escalation_link(&mut query, "ESC-1");
+        apply_review_status(
+            &mut query,
+            "approved",
+            reviewer,
+            "2026-04-25T12:05:00Z".to_string(),
+        );
+
+        restore_escalation_review_state(&mut query, "ESC-1");
+
+        assert_eq!(query.status, "escalated");
+        assert_eq!(query.escalation_id, Some("ESC-1".to_string()));
+        assert_eq!(query.reviewed_at, None);
+        assert!(query.reviewed_by.is_none());
     }
 }

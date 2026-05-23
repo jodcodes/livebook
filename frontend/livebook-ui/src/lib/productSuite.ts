@@ -47,6 +47,7 @@ export function createProductWorkflows({
         review_mode: reviewMode,
         custom_instructions: customReviewInstructions,
         selected_text: selectedText,
+        persist: false,
       }),
     },
     {

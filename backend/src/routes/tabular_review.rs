@@ -116,6 +116,11 @@ pub struct ApplyInsightsRequest {
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
+pub struct RestoreInsightsRequest {
+    pub session: TabularReviewSession,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct TextReviewRequest {
     pub contract_text: String,
     pub file_name: Option<String>,
@@ -495,7 +500,7 @@ pub async fn apply_tabular_review_insights(
         append_negotiation_history_once(&mut playbook[clause_idx], history_entry);
     }
 
-    write_playbook_array(&playbook).await?;
+    write_playbook_array(&playbook, "tabular_review_apply").await?;
     let _ = run_evolve_analysis().await;
 
     let applied_ids = rows_to_apply
@@ -513,6 +518,40 @@ pub async fn apply_tabular_review_insights(
     write_sessions(&sessions).await?;
 
     Ok(Json(updated))
+}
+
+pub async fn restore_tabular_review_insights(
+    Path(session_id): Path<String>,
+    Json(body): Json<RestoreInsightsRequest>,
+) -> Result<Json<TabularReviewSession>, (StatusCode, String)> {
+    if body.session.session_id != session_id {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "restore session id does not match path id".to_string(),
+        ));
+    }
+
+    let mut sessions = read_sessions().await?;
+    let idx = sessions
+        .iter()
+        .position(|entry| entry.session_id == session_id)
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            "review session not found".to_string(),
+        ))?;
+
+    let mut playbook = read_playbook_array().await?;
+    for clause in &mut playbook {
+        remove_negotiation_history_for_session(clause, &session_id);
+    }
+    write_playbook_array(&playbook, "tabular_review_restore").await?;
+
+    sessions[idx] = body.session.clone();
+    let restored = sessions[idx].clone();
+    write_sessions(&sessions).await?;
+    let _ = run_evolve_analysis().await;
+
+    Ok(Json(restored))
 }
 
 fn detect_contract_file_kind(
@@ -1132,15 +1171,13 @@ async fn read_playbook_array() -> Result<Vec<Value>, (StatusCode, String)> {
     }
 }
 
-async fn write_playbook_array(clauses: &[Value]) -> Result<(), (StatusCode, String)> {
-    store::replace_playbook_documents(
-        &Value::Array(clauses.to_vec()),
-        "tabular_review_apply",
-        None,
-        None,
-    )
-    .await
-    .map_err(internal_error)
+async fn write_playbook_array(
+    clauses: &[Value],
+    operation: &str,
+) -> Result<(), (StatusCode, String)> {
+    store::replace_playbook_documents(&Value::Array(clauses.to_vec()), operation, None, None)
+        .await
+        .map_err(internal_error)
 }
 
 fn internal_error(message: String) -> (StatusCode, String) {
@@ -1181,6 +1218,19 @@ fn append_negotiation_history_once(clause: &mut Value, history_entry: Value) {
             }
         }
     }
+}
+
+fn remove_negotiation_history_for_session(clause: &mut Value, session_id: &str) {
+    let Some(history) = clause
+        .as_object_mut()
+        .and_then(|object| object.get_mut("negotiation_history"))
+        .and_then(Value::as_array_mut)
+    else {
+        return;
+    };
+
+    history
+        .retain(|entry| entry.get("review_session_id").and_then(Value::as_str) != Some(session_id));
 }
 
 fn display_name_from_filename(file_name: &str) -> String {
@@ -1412,6 +1462,28 @@ mod tests {
         let row = sample_row("preferred", "low");
         assert!(!should_apply_row(&row, None, false));
         assert!(should_apply_row(&row, None, true));
+    }
+
+    #[test]
+    fn restoring_insights_removes_only_matching_session_history() {
+        let mut clause = json!({
+            "clause_id": "C01",
+            "negotiation_history": [
+                { "review_session_id": "TR-1", "contract_id": "contract-a" },
+                { "review_session_id": "TR-2", "contract_id": "contract-b" },
+                { "source": "manual", "contract_id": "contract-c" }
+            ]
+        });
+
+        remove_negotiation_history_for_session(&mut clause, "TR-1");
+
+        let history = clause["negotiation_history"].as_array().unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(
+            history[0]["review_session_id"],
+            Value::String("TR-2".to_string())
+        );
+        assert_eq!(history[1]["source"], Value::String("manual".to_string()));
     }
 
     #[test]

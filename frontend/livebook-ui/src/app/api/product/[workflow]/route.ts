@@ -8,6 +8,7 @@ const workflowEndpoints: Record<string, string> = {
   "word-review-actions": "/product/word-review/actions",
   "word-review-action": "/product/word-review/action",
   "word-review-bulk-apply": "/product/word-review/bulk-apply",
+  "word-review-restore": "/product/word-review/restore",
   "draft-clause": "/product/draft-clause",
   "clause-library-search": "/product/clause-library/search",
   "clause-library-save": "/product/clause-library/save",

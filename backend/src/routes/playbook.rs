@@ -983,10 +983,9 @@ fn stamp_uploaded_playbook(
             "playbook_id".to_string(),
             Value::String(playbook_id.to_string()),
         );
-        object.insert(
-            "playbook_name".to_string(),
-            Value::String(playbook_name.to_string()),
-        );
+        object
+            .entry("playbook_name".to_string())
+            .or_insert_with(|| Value::String(playbook_name.to_string()));
         object.insert(
             "playbook_type".to_string(),
             Value::String(playbook_type.to_string()),
@@ -996,15 +995,14 @@ fn stamp_uploaded_playbook(
             Value::String(party_name.to_string()),
         );
         object.insert("law_type".to_string(), Value::String(law_type.to_string()));
-        object.insert(
-            "source_files".to_string(),
+        object.entry("source_files".to_string()).or_insert_with(|| {
             Value::Array(
                 source_files
                     .iter()
                     .map(|file_name| Value::String(file_name.clone()))
                     .collect(),
-            ),
-        );
+            )
+        });
         let clause_type = object
             .get("clause_type")
             .and_then(Value::as_str)
@@ -1708,6 +1706,129 @@ pub async fn get_playbook_version_detail(
     Ok(Json(detail))
 }
 
+pub async fn restore_playbook_version(
+    Path((playbook_id, version_id)): Path<(String, String)>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    let versions = playbook_versions_for(&playbook_id).await?;
+    let version = versions
+        .iter()
+        .find(|entry| entry.get("version_id").and_then(Value::as_str) == Some(version_id.as_str()))
+        .cloned()
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            "playbook version not found".to_string(),
+        ))?;
+    let snapshot = version
+        .get("snapshot")
+        .and_then(Value::as_array)
+        .cloned()
+        .ok_or((
+            StatusCode::NOT_FOUND,
+            "playbook version snapshot not found".to_string(),
+        ))?;
+
+    let current = read_playbook_array().await?;
+    let mut changed_clause_ids = snapshot
+        .iter()
+        .filter_map(|clause| {
+            clause
+                .get("clause_id")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+        })
+        .collect::<Vec<_>>();
+    let restored_snapshot = snapshot
+        .into_iter()
+        .map(|mut restored_clause| {
+            carry_forward_restore_history(&current, &mut restored_clause, "playbook_restore");
+            restored_clause
+        })
+        .collect::<Vec<_>>();
+    let mut restored = current
+        .into_iter()
+        .filter(|clause| {
+            clause.get("playbook_id").and_then(Value::as_str) != Some(playbook_id.as_str())
+        })
+        .collect::<Vec<_>>();
+    restored.extend(restored_snapshot);
+    let mut restored_value = Value::Array(restored);
+    normalize_playbook_value(&mut restored_value);
+    let restored_array = restored_value.as_array().cloned().unwrap_or_default();
+    changed_clause_ids.sort();
+    changed_clause_ids.dedup();
+    write_playbook_array(&restored_array, "playbook_version_restore").await?;
+    record_playbook_version(
+        &Value::Array(restored_array.clone()),
+        &playbook_id,
+        "playbook_version_restore",
+        true,
+        &changed_clause_ids,
+    )
+    .await?;
+    Ok(Json(json!({
+        "playbook_id": playbook_id,
+        "restored_version_id": version_id,
+        "restored_clause_count": changed_clause_ids.len()
+    })))
+}
+
+pub async fn restore_clause_snapshot(
+    Path(clause_id): Path<String>,
+    Json(snapshot): Json<Value>,
+) -> Result<Json<Value>, (StatusCode, String)> {
+    if !snapshot.is_object() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "clause snapshot body must be a JSON object".to_string(),
+        ));
+    }
+    if snapshot.get("clause_id").and_then(Value::as_str) != Some(clause_id.as_str()) {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "clause snapshot id does not match path id".to_string(),
+        ));
+    }
+
+    let mut clauses = read_playbook_array().await?;
+    let idx = find_clause_index(&clauses, &clause_id)?;
+    let current_version = meta_version(&clauses[idx]);
+    let restored_from_version_id = meta_string(&snapshot, "version_id");
+    append_clause_history_entry(&mut clauses[idx], "lawyer", "snapshot_restore");
+    let restored_history = clauses[idx]
+        .get("history")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let mut restored = snapshot;
+    if let Some(object) = restored.as_object_mut() {
+        object.insert("history".to_string(), Value::Array(restored_history));
+    }
+    set_meta_number(&mut restored, "version", current_version + 1);
+    if let Some(version_id) = restored_from_version_id {
+        set_meta_string(&mut restored, "restored_from_version_id", &version_id);
+    }
+    assign_fresh_version_id(&mut restored, "snapshot_restore");
+    normalize_clause(&mut restored);
+
+    clauses[idx] = restored.clone();
+    let playbook_id = restored
+        .get("playbook_id")
+        .and_then(Value::as_str)
+        .unwrap_or("default")
+        .to_string();
+    write_playbook_array(&clauses, "clause_snapshot_restore").await?;
+    record_playbook_version(
+        &Value::Array(clauses.clone()),
+        &playbook_id,
+        "clause_snapshot_restore",
+        false,
+        &[clause_id],
+    )
+    .await?;
+    Ok(Json(restored))
+}
+
 #[utoipa::path(
     get,
     path = "/playbook/{clause_id}",
@@ -2019,6 +2140,12 @@ pub async fn restore_clause_version(
                 .and_then(Value::as_str)
                 .map(str::to_owned)
         });
+    let restored_review_status = snapshot
+        .get("meta")
+        .and_then(|meta| meta.get("review_status"))
+        .and_then(Value::as_str)
+        .unwrap_or("approved")
+        .to_string();
 
     let current_version = meta_version(&clauses[idx]);
     let existing_history = clauses[idx]
@@ -2044,7 +2171,7 @@ pub async fn restore_clause_version(
         clause.insert("history".to_string(), Value::Array(appended_history));
     }
     set_meta_number(&mut clauses[idx], "version", current_version + 1);
-    set_meta_string(&mut clauses[idx], "review_status", "approved");
+    set_meta_string(&mut clauses[idx], "review_status", &restored_review_status);
     if let Some(version_id) = restored_from_version_id {
         set_meta_string(&mut clauses[idx], "restored_from_version_id", &version_id);
     }
@@ -2648,6 +2775,43 @@ fn append_clause_history_entry(clause: &mut Value, approved_by: &str, action: &s
             history_array.push(entry);
         }
     }
+}
+
+fn carry_forward_restore_history(current: &[Value], restored_clause: &mut Value, action: &str) {
+    let Some(current_clause) = current
+        .iter()
+        .find(|clause| same_clause_identity(clause, restored_clause))
+        .cloned()
+    else {
+        append_clause_history_entry(restored_clause, "lawyer", action);
+        return;
+    };
+
+    let mut history_source = current_clause;
+    append_clause_history_entry(&mut history_source, "lawyer", action);
+    if let Some(history) = history_source.get("history").and_then(Value::as_array) {
+        if let Some(object) = restored_clause.as_object_mut() {
+            object.insert("history".to_string(), Value::Array(history.clone()));
+        }
+    }
+}
+
+fn same_clause_identity(left: &Value, right: &Value) -> bool {
+    let left_ids = [
+        left.get("clause_id").and_then(Value::as_str),
+        left.get("original_clause_id").and_then(Value::as_str),
+    ];
+    let right_ids = [
+        right.get("clause_id").and_then(Value::as_str),
+        right.get("original_clause_id").and_then(Value::as_str),
+    ];
+
+    left_ids.iter().flatten().any(|left_id| {
+        right_ids
+            .iter()
+            .flatten()
+            .any(|right_id| left_id == right_id)
+    })
 }
 
 fn snapshot_clause_fields(clause: &Value) -> Value {
@@ -3814,6 +3978,9 @@ mod tests {
     #[test]
     fn stamp_uploaded_playbook_preserves_source_metadata() {
         let mut playbook = Value::Array(vec![complete_clause()]);
+        playbook[0]["playbook_name"] = Value::String("Globex Playbook".to_string());
+        playbook[0]["source_files"] =
+            Value::Array(vec![Value::String("Globex NDA.pdf".to_string())]);
         let mut existing_ids = HashSet::new();
         let uploader = UploaderContext {
             role: UploaderRole::Lawyer,
@@ -4025,6 +4192,28 @@ mod tests {
         assert_eq!(
             history[0]["fields_snapshot"]["red_line"],
             Value::String("No uncapped liability".to_string())
+        );
+    }
+
+    #[test]
+    fn playbook_restore_carries_forward_existing_clause_history() {
+        let mut current = complete_clause();
+        append_clause_history_entry(&mut current, "Ada", "edit");
+        current["red_line"] = Value::String("No indirect damages".to_string());
+        let mut restored_snapshot = snapshot_clause_fields(&complete_clause());
+
+        carry_forward_restore_history(&[current], &mut restored_snapshot, "playbook_restore");
+
+        let history = restored_snapshot["history"].as_array().unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0]["action"], Value::String("edit".to_string()));
+        assert_eq!(
+            history[1]["action"],
+            Value::String("playbook_restore".to_string())
+        );
+        assert_eq!(
+            history[1]["fields_snapshot"]["red_line"],
+            Value::String("No indirect damages".to_string())
         );
     }
 

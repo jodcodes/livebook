@@ -129,6 +129,29 @@ pub async fn reject_evolve(Path(id): Path<String>) -> Result<Json<Value>, (Statu
     Ok(Json(suggestions[suggestion_idx].clone()))
 }
 
+pub async fn restore_evolve(Path(id): Path<String>) -> Result<Json<Value>, (StatusCode, String)> {
+    let mut suggestions = read_suggestions().await?;
+    let suggestion_idx = suggestions
+        .iter()
+        .position(|entry| entry.get("id").and_then(Value::as_str) == Some(id.as_str()))
+        .ok_or((StatusCode::NOT_FOUND, "suggestion not found".to_string()))?;
+    let clause_id = suggestions[suggestion_idx]
+        .get("clause_id")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+
+    restore_suggestion_pending(&mut suggestions[suggestion_idx]);
+    write_suggestions(&suggestions).await?;
+
+    let mut clauses = read_playbook_array().await?;
+    if let Ok(clause_idx) = find_clause_index(&clauses, &clause_id) {
+        set_meta_bool(&mut clauses[clause_idx], "pending_evolve", true);
+        write_playbook_array(&clauses).await?;
+    }
+    Ok(Json(suggestions[suggestion_idx].clone()))
+}
+
 pub async fn run_evolve_analysis() -> Result<(), (StatusCode, String)> {
     let mut clauses = read_playbook_array().await?;
     let mut suggestions = read_suggestions().await?;
@@ -430,6 +453,13 @@ fn set_meta_bool(clause: &mut Value, key: &str, value: bool) {
     }
 }
 
+fn restore_suggestion_pending(suggestion: &mut Value) {
+    if let Some(object) = suggestion.as_object_mut() {
+        object.insert("status".to_string(), Value::String("pending".to_string()));
+        object.remove("archived_at");
+    }
+}
+
 fn meta_version(clause: &Value) -> u64 {
     clause
         .get("meta")
@@ -497,4 +527,24 @@ fn fnv1a_64(input: &[u8]) -> u64 {
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct EvolveApproveRequest {
     pub proposed_change: Option<Value>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restore_suggestion_reopens_archived_item() {
+        let mut suggestion = json!({
+            "id": "EV-1",
+            "clause_id": "C01",
+            "status": "approved",
+            "archived_at": "2026-04-25T12:00:00Z"
+        });
+
+        restore_suggestion_pending(&mut suggestion);
+
+        assert_eq!(suggestion["status"], Value::String("pending".to_string()));
+        assert!(suggestion.get("archived_at").is_none());
+    }
 }

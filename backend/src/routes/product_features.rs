@@ -40,6 +40,7 @@ pub struct WordReviewRequest {
     pub document_text: String,
     pub actor: String,
     pub word_context_available: bool,
+    pub persist: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -63,6 +64,14 @@ pub struct ReviewActionBody {
 pub struct BulkReviewBody {
     pub session: ReviewSession,
     pub actor: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ReviewRestoreBody {
+    pub session: ReviewSession,
+    pub expected_session: Option<ReviewSession>,
+    pub actor: String,
+    pub reason: Option<String>,
 }
 
 pub fn run_word_review(request: WordReviewRequest) -> Result<ReviewSession, String> {
@@ -999,11 +1008,14 @@ pub fn run_proofread(document_text: &str) -> Vec<ProofreadFinding> {
 pub async fn post_word_review(
     Json(request): Json<WordReviewRequest>,
 ) -> Result<Json<ReviewSession>, (StatusCode, Json<Value>)> {
+    let should_persist = request.persist.unwrap_or(true);
     let session = run_word_review(request)
         .map_err(|message| (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))))?;
-    persist_word_review_session(&session)
-        .await
-        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    if should_persist {
+        persist_word_review_session(&session)
+            .await
+            .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    }
     Ok(Json(session))
 }
 
@@ -1071,6 +1083,49 @@ pub async fn post_word_review_bulk_apply(
     )
     .await;
     Ok(Json(payload))
+}
+
+pub async fn post_word_review_restore(
+    Json(body): Json<ReviewRestoreBody>,
+) -> Result<Json<ReviewSession>, (StatusCode, Json<Value>)> {
+    let session = body.session;
+    let reason = body
+        .reason
+        .unwrap_or_else(|| "Undo review action".to_string());
+    if let Some(expected_session) = body.expected_session {
+        let stored = store::get_word_review_session(&session.session_id)
+            .await
+            .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+        let expected_payload = serde_json::to_value(expected_session).map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("failed to serialize expected session: {err}") })),
+            )
+        })?;
+        if stored.as_ref() != Some(&expected_payload) {
+            return Err((
+                StatusCode::CONFLICT,
+                Json(json!({
+                    "error": "Review session changed before undo. Reload saved reviews before restoring."
+                })),
+            ));
+        }
+    }
+    persist_word_review_session(&session)
+        .await
+        .map_err(|message| (StatusCode::BAD_GATEWAY, Json(json!({ "error": message }))))?;
+    let payload = serde_json::to_value(&session).unwrap_or_else(|_| json!({}));
+    let _ = store::append_word_review_action(
+        &session.session_id,
+        "undo",
+        &body.actor,
+        &json!({
+            "reason": reason,
+            "session": payload,
+        }),
+    )
+    .await;
+    Ok(Json(session))
 }
 
 pub async fn post_draft_clause(Json(request): Json<DraftRequest>) -> Json<DraftResult> {
@@ -1696,6 +1751,7 @@ mod tests {
             document_text: "This agreement has unlimited liability and [insert party].".into(),
             actor: "Alex".into(),
             word_context_available: true,
+            persist: None,
         })
         .expect("review should run");
 
@@ -1741,6 +1797,7 @@ mod tests {
             document_text: "Text".into(),
             actor: "Alex".into(),
             word_context_available: false,
+            persist: None,
         });
         assert!(unavailable.is_err());
 
@@ -1748,6 +1805,7 @@ mod tests {
             document_text: "This contract has unlimited liability and unclear services.".into(),
             actor: "Alex".into(),
             word_context_available: true,
+            persist: None,
         })
         .expect("review should run");
         let summary = bulk_apply_review(&mut session, "Alex").expect("bulk apply should work");

@@ -11,7 +11,8 @@ use utoipa::{IntoParams, ToSchema};
 
 use crate::repositories::store;
 use crate::routes::chat_queries::{
-    ChatQueryActor, link_chat_query_to_escalation, update_chat_query_review,
+    ChatQueryActor, link_chat_query_to_escalation, restore_chat_query_escalation,
+    update_chat_query_review,
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -65,6 +66,11 @@ pub struct ResolveEscalationRequest {
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
 pub struct DeclineEscalationRequest {
     pub reviewed_by: EscalationActor,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
+pub struct RestoreEscalationRequest {
+    pub item: EscalationItem,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, ToSchema)]
@@ -260,6 +266,28 @@ pub async fn decline_escalation(
     .await?;
 
     Ok(Json(item))
+}
+
+pub async fn restore_escalation(
+    Path(id): Path<String>,
+    Json(body): Json<RestoreEscalationRequest>,
+) -> Result<Json<EscalationItem>, (StatusCode, String)> {
+    if body.item.id != id {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            "restore item id does not match path id".to_string(),
+        ));
+    }
+
+    let mut queue = read_escalation_queue().await?;
+    if let Some(idx) = queue.iter().position(|entry| entry.id == id) {
+        queue[idx] = body.item.clone();
+    } else {
+        queue.push(body.item.clone());
+    }
+    write_escalation_queue(&queue).await?;
+    restore_chat_query_escalation(body.item.query_id.as_deref(), &body.item.id).await?;
+    Ok(Json(body.item))
 }
 
 fn validate_create_request(body: &CreateEscalationRequest) -> Result<(), (StatusCode, String)> {

@@ -154,7 +154,13 @@ export default function Sidebar() {
               {t("Sign Out")}
             </span>
           </Button>
-          <LanguageToggle className={cn(isCollapsed ? "justify-center" : "shrink-0")} compact />
+          <LanguageToggle
+            className={cn(
+              isCollapsed ? "flex-col justify-center" : "shrink-0",
+              "max-sm:flex-col"
+            )}
+            compact
+          />
         </div>
       </div>
     </aside>

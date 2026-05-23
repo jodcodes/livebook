@@ -79,6 +79,18 @@ interface TabularReviewProps {
   userRole: "business" | "lawyer";
 }
 
+type PendingAction = {
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
+type UndoAction = {
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
 async function apiJson<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
     ...init,
@@ -145,6 +157,8 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
   const [searchTerm, setSearchTerm] = useState("");
   const [outcomeFilter, setOutcomeFilter] = useState("all");
   const [confidenceFilter, setConfidenceFilter] = useState("all");
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [undoAction, setUndoAction] = useState<UndoAction | null>(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -346,12 +360,35 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
     }
   }
 
-  async function applyInsights() {
+  function stageAction(action: PendingAction) {
+    setUndoAction(null);
+    setPendingAction(action);
+  }
+
+  function confirmPendingAction() {
+    const action = pendingAction;
+    if (!action) return;
+    setPendingAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  function cancelPendingAction() {
+    setPendingAction(null);
+  }
+
+  function undoLastAction() {
+    const action = undoAction;
+    if (!action) return;
+    setUndoAction(null);
+    void Promise.resolve(action.run()).catch((err) => {
+      setError(err instanceof Error ? err.message : String(err));
+    });
+  }
+
+  async function executeApplyInsights(previousSession: TabularReviewSession) {
     if (!activeSession) return;
-    const confirmed = window.confirm(
-      t("This will add eligible review rows to negotiation history and send resulting playbook recommendations to the review queue. It will not change the playbook directly. Do you want to continue?")
-    );
-    if (!confirmed) return;
     setError(null);
     setNotice(null);
     try {
@@ -363,11 +400,37 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
         }
       );
       setActiveSession(updated);
+      setUndoAction({
+        title: t("Undo apply insights"),
+        detail: t("Restore the review session and remove the applied negotiation history writebacks."),
+        run: async () => {
+          const restored = await apiJson<TabularReviewSession>(
+            `/tabular-review/${encodeURIComponent(previousSession.session_id)}/restore-insights`,
+            {
+              method: "POST",
+              body: JSON.stringify({ session: previousSession }),
+            }
+          );
+          setActiveSession(restored);
+          setNotice(t("Review session and writebacks restored."));
+          await refresh();
+        },
+      });
       setNotice(t("Insights added to negotiation history. Resulting playbook recommendations were sent to the review queue."));
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
+  }
+
+  function applyInsights() {
+    if (!activeSession) return;
+    const previousSession = JSON.parse(JSON.stringify(activeSession)) as TabularReviewSession;
+    stageAction({
+      title: t("Apply Insights"),
+      detail: t("Review and confirm before adding eligible rows to negotiation history and sending recommendations to the review queue."),
+      run: () => executeApplyInsights(previousSession),
+    });
   }
 
   return (
@@ -465,6 +528,37 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
 
         {error ? <Notice tone="danger" className="mt-3">{error}</Notice> : null}
         {notice ? <Notice tone="success" className="mt-3">{notice}</Notice> : null}
+        {pendingAction ? (
+          <Notice tone="warning" title={t("Confirm action")} className="mt-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-foreground">{pendingAction.title}</p>
+                <p>{pendingAction.detail}</p>
+              </div>
+              <div className="flex shrink-0 flex-wrap gap-2">
+                <Button type="button" size="sm" onClick={confirmPendingAction}>
+                  {t("Confirm")}
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={cancelPendingAction}>
+                  {t("Cancel")}
+                </Button>
+              </div>
+            </div>
+          </Notice>
+        ) : null}
+        {!pendingAction && undoAction ? (
+          <Notice tone="success" title={t("Action confirmed")} className="mt-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="font-medium text-foreground">{undoAction.title}</p>
+                <p>{undoAction.detail}</p>
+              </div>
+              <Button type="button" size="sm" variant="secondary" onClick={undoLastAction}>
+                {t("Undo")}
+              </Button>
+            </div>
+          </Notice>
+        ) : null}
       </header>
 
       <div
@@ -530,7 +624,7 @@ export default function TabularReview({ userRole }: TabularReviewProps) {
                 <Button
                   type="button"
                   onClick={applyInsights}
-                  disabled={!activeSession || rows.length === 0 || Boolean(activeSession.applied_at)}
+                  disabled={!activeSession || rows.length === 0 || Boolean(activeSession.applied_at) || Boolean(pendingAction)}
                   className="max-w-full shrink-0"
                 >
                   <i className="ri-sparkling-line text-base" data-icon="inline-start" />

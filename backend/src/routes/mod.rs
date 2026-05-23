@@ -12,13 +12,16 @@ pub use email::{
     approve_email_queue, get_email_queue, ingest_email, reject_email_queue,
     run_email_processing_loop,
 };
-pub use escalation::{create_escalation, decline_escalation, get_escalations, resolve_escalation};
-pub use evolve::{approve_evolve, get_evolve, reject_evolve, run_evolve_analysis};
+pub use escalation::{
+    create_escalation, decline_escalation, get_escalations, resolve_escalation, restore_escalation,
+};
+pub use evolve::{approve_evolve, get_evolve, reject_evolve, restore_evolve, run_evolve_analysis};
 pub use playbook::{
     approve_playbook_clause, confirm_playbook_upload_draft, decline_playbook_clause,
     explain_version_compare, get_clause_history, get_playbook, get_playbook_clause,
     get_playbook_history, get_playbook_review, get_playbook_version_detail, get_playbook_versions,
-    get_playbooks, patch_playbook, patch_playbook_clause, post_playbook, restore_clause_version,
+    get_playbooks, patch_playbook, patch_playbook_clause, post_playbook, restore_clause_snapshot,
+    restore_clause_version, restore_playbook_version,
 };
 pub use product_features::{
     post_associate_project, post_associate_project_actions, post_associate_project_list,
@@ -26,13 +29,13 @@ pub use product_features::{
     post_document_chat, post_draft_clause, post_precedent_list, post_precedent_upload,
     post_precedent_upload_file, post_proofread, post_word_review, post_word_review_action,
     post_word_review_actions, post_word_review_bulk_apply, post_word_review_list,
-    post_workspace_activity_append, post_workspace_activity_list, post_workspace_settings_get,
-    post_workspace_settings_save,
+    post_word_review_restore, post_workspace_activity_append, post_workspace_activity_list,
+    post_workspace_settings_get, post_workspace_settings_save,
 };
 pub use question::{get_question, post_question};
 pub use tabular_review::{
     apply_tabular_review_insights, get_tabular_review, get_tabular_reviews, post_tabular_review,
-    post_tabular_review_text,
+    post_tabular_review_text, restore_tabular_review_insights,
 };
 use utoipa::OpenApi;
 

@@ -349,6 +349,18 @@ pub async fn upsert_word_review_session(
     Ok(())
 }
 
+pub async fn get_word_review_session(session_id: &str) -> Result<Option<Value>, String> {
+    let client = db()?.client().await?;
+    let row = client
+        .query_opt(
+            "SELECT payload FROM word_review_sessions WHERE session_id = $1",
+            &[&session_id],
+        )
+        .await
+        .map_err(|err| format!("failed to read word review session `{session_id}`: {err}"))?;
+    Ok(row.map(|row| row.get::<_, Value>(0)))
+}
+
 pub async fn list_word_review_sessions() -> Result<Vec<Value>, String> {
     list_table_payloads("word_review_sessions", "updated_at DESC, session_id ASC").await
 }

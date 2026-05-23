@@ -14,6 +14,21 @@ type ResultState = {
   error?: string;
 };
 
+type PendingAction = {
+  id: string;
+  title: string;
+  detail: string;
+  confirmLabel?: string;
+  run: () => Promise<void> | void;
+};
+
+type UndoAction = {
+  id: string;
+  title: string;
+  detail: string;
+  run: () => Promise<void> | void;
+};
+
 type Activity = {
   id: string;
   label: string;
@@ -38,6 +53,12 @@ type ReviewFinding = {
   redline?: string | null;
   eligible_for_bulk: boolean;
   audit?: AuditEntry[];
+};
+
+type WordReviewSession = {
+  session_id: string;
+  status: string;
+  findings: ReviewFinding[];
 };
 
 type DraftResult = {
@@ -113,6 +134,33 @@ function confidenceLabel(value: number) {
   return `${Math.round(value * 100)}%`;
 }
 
+function cloneJson<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function reviewActionTitle(action: string) {
+  switch (action) {
+    case "apply":
+      return "Apply redline";
+    case "reject":
+      return "Reject finding";
+    case "skip":
+      return "Skip finding";
+    default:
+      return action;
+  }
+}
+
+function uniqueActivities(items: Activity[]) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = `${item.id}:${item.label}:${item.detail}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function EmptyResult({ label }: { label: string }) {
   return (
     <p className="rounded-lg border border-dashed bg-muted/30 p-3 text-sm text-muted-foreground">
@@ -156,6 +204,59 @@ function ResultActions({
         <i className="ri-share-forward-line" data-icon="inline-start" />
         Escalate
       </Button>
+    </div>
+  );
+}
+
+function ActionGate({
+  pendingAction,
+  lastUndo,
+  onConfirm,
+  onCancel,
+  onUndo,
+}: {
+  pendingAction: PendingAction | null;
+  lastUndo: UndoAction | null;
+  onConfirm: () => void;
+  onCancel: () => void;
+  onUndo: () => void;
+}) {
+  if (!pendingAction && !lastUndo) return null;
+
+  return (
+    <div className="rounded-lg border border-livebook/30 bg-livebook-pale/40 p-3">
+      {pendingAction ? (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <StatusBadge tone="warning">Confirm action</StatusBadge>
+            <p className="mt-2 font-medium text-foreground">{pendingAction.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{pendingAction.detail}</p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <Button type="button" size="sm" onClick={onConfirm}>
+              <i className="ri-check-line" data-icon="inline-start" />
+              {pendingAction.confirmLabel ?? "Confirm"}
+            </Button>
+            <Button type="button" size="sm" variant="ghost" onClick={onCancel}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {!pendingAction && lastUndo ? (
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="min-w-0">
+            <StatusBadge tone="success">Action confirmed</StatusBadge>
+            <p className="mt-2 font-medium text-foreground">{lastUndo.title}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{lastUndo.detail}</p>
+          </div>
+          <Button type="button" size="sm" variant="secondary" className="shrink-0" onClick={onUndo}>
+            <i className="ri-arrow-go-back-line" data-icon="inline-start" />
+            Undo
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -658,6 +759,8 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
   const [savedData, setSavedData] = useState<Record<SavedPanelKind, ResultState>>({} as Record<SavedPanelKind, ResultState>);
   const [activity, setActivity] = useState<Activity[]>([]);
   const [activityHydrated, setActivityHydrated] = useState(false);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
+  const [lastUndo, setLastUndo] = useState<UndoAction | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -679,7 +782,8 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
           return;
         }
         const data = (await response.json()) as { activity?: Activity[] };
-        if (!cancelled) setActivity((data.activity?.length ? data.activity : localActivity).slice(0, 12));
+        const loadedActivity = data.activity?.length ? data.activity : localActivity;
+        if (!cancelled) setActivity(uniqueActivities(loadedActivity).slice(0, 12));
       } catch {
         window.localStorage.removeItem(ACTIVITY_STORAGE_KEY);
       } finally {
@@ -713,7 +817,65 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
   const activeWorkflow = workflows.find((workflow) => workflow.id === activeWorkflowId);
   const visibleWorkflows = activeWorkflow ? [activeWorkflow] : workflows;
 
-  const runWorkflow = async (workflow: ProductWorkflow) => {
+  const recordActivity = (label: string, detail: string) => {
+    const item = {
+      id: `${Date.now()}-${label}`,
+      label,
+      detail,
+    };
+    setActivity((current) => [
+      item,
+      ...current,
+    ].slice(0, 12));
+    void fetch("/api/product/workspace-activity-append", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        label,
+        detail,
+        workflow: activeWorkflowId ?? "product-suite",
+        actor: "Livebook User",
+      }),
+    }).catch(() => undefined);
+    return item;
+  };
+
+  const stageAction = (action: Omit<PendingAction, "id">) => {
+    setLastUndo(null);
+    setPendingAction({
+      ...action,
+      id: `${Date.now()}-${action.title}`,
+    });
+  };
+
+  const confirmPendingAction = () => {
+    const action = pendingAction;
+    if (!action) return;
+
+    setPendingAction(null);
+    void Promise.resolve(action.run()).catch((error) => {
+      recordActivity("Action failed", error instanceof Error ? error.message : String(error));
+    });
+  };
+
+  const cancelPendingAction = () => {
+    if (pendingAction) {
+      recordActivity("Action canceled", pendingAction.title);
+    }
+    setPendingAction(null);
+  };
+
+  const undoLastAction = () => {
+    const action = lastUndo;
+    if (!action) return;
+
+    setLastUndo(null);
+    void Promise.resolve(action.run()).catch((error) => {
+      recordActivity("Undo failed", error instanceof Error ? error.message : String(error));
+    });
+  };
+
+  const executeWorkflow = async (workflow: ProductWorkflow, previousState?: ResultState) => {
     setResults((current) => ({
       ...current,
       [workflow.id]: { loading: true },
@@ -735,6 +897,23 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
         ...current,
         [workflow.id]: { data },
       }));
+      setLastUndo({
+        id: `${Date.now()}-${workflow.id}-undo`,
+        title: `Undo ${workflow.title}`,
+        detail: "Restore the previous visible result for this workflow.",
+        run: () => {
+          setResults((current) => {
+            const next = { ...current };
+            if (previousState) {
+              next[workflow.id] = previousState;
+            } else {
+              delete next[workflow.id];
+            }
+            return next;
+          });
+          recordActivity("Undo", `${workflow.title} result restored.`);
+        },
+      });
       recordActivity(workflow.title, `${workflow.actionLabel} completed.`);
     } catch (error) {
       setResults((current) => ({
@@ -744,26 +923,31 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
     }
   };
 
-  const recordActivity = (label: string, detail: string) => {
-    const item = {
-      id: `${Date.now()}-${label}`,
-      label,
+  const runWorkflow = (workflow: ProductWorkflow) => {
+    const previousState = results[workflow.id] ? cloneJson(results[workflow.id]) : undefined;
+    stageAction({
+      title: workflow.actionLabel,
+      detail: `Review and confirm before Livebook runs ${workflow.title}.`,
+      run: () => executeWorkflow(workflow, previousState),
+    });
+  };
+
+  const stageActivityAction = (label: string, detail: string) => {
+    stageAction({
+      title: label,
       detail,
-    };
-    setActivity((current) => [
-      item,
-      ...current,
-    ].slice(0, 12));
-    void fetch("/api/product/workspace-activity-append", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        label,
-        detail,
-        workflow: activeWorkflowId ?? "product-suite",
-        actor: "Livebook User",
-      }),
-    }).catch(() => undefined);
+      run: () => {
+        const item = recordActivity(label, detail);
+        setLastUndo({
+          id: `${item.id}-undo`,
+          title: `Undo ${label}`,
+          detail: "Remove this local activity marker.",
+          run: () => {
+            setActivity((current) => current.filter((entry) => entry.id !== item.id));
+          },
+        });
+      },
+    });
   };
 
   const postProductAction = async (workflow: string, payload: Record<string, unknown>) => {
@@ -793,48 +977,99 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
     }
   };
 
-  const applyReviewAction = async (findingId: string, action: string, editedRedline?: string | null) => {
-    const session = results["word-review"]?.data;
-    if (!session) {
-      recordActivity("Review action unavailable", "Run Word Review before applying a finding.");
-      return;
-    }
+  const restoreWordReviewSession = async (
+    previousSession: WordReviewSession,
+    detail: string,
+    expectedSession: WordReviewSession
+  ) => {
+    const data = (await postProductAction("word-review-restore", {
+      session: previousSession,
+      expected_session: expectedSession,
+      actor: "Legal Reviewer",
+      reason: detail,
+    })) as WordReviewSession;
+    setResults((current) => ({ ...current, "word-review": { data } }));
+    recordActivity("Undo", detail);
+    await loadSaved("reviews", "word-review-list");
+  };
+
+  const executeReviewAction = async (
+    findingId: string,
+    action: string,
+    previousSession: WordReviewSession,
+    editedRedline?: string | null
+  ) => {
     try {
-      const data = await postProductAction("word-review-action", {
-        session,
+      const data = (await postProductAction("word-review-action", {
+        session: previousSession,
         finding_id: findingId,
         actor: "Legal Reviewer",
         action,
         edited_redline: editedRedline,
-      });
+      })) as WordReviewSession;
       setResults((current) => ({ ...current, "word-review": { data } }));
       recordActivity("Review action saved", `${action} ${findingId}`);
+      setLastUndo({
+        id: `${Date.now()}-${findingId}-undo`,
+        title: `Undo ${reviewActionTitle(action)}`,
+        detail: `Restore ${findingId} to its previous review state.`,
+        run: () => restoreWordReviewSession(previousSession, `Undo ${action} ${findingId}`, data),
+      });
       await loadSaved("reviews", "word-review-list");
     } catch (error) {
       recordActivity("Review action failed", error instanceof Error ? error.message : String(error));
     }
   };
 
-  const bulkApplyReview = async () => {
-    const session = results["word-review"]?.data;
+  const applyReviewAction = (findingId: string, action: string, editedRedline?: string | null) => {
+    const session = results["word-review"]?.data as WordReviewSession | undefined;
     if (!session) {
-      recordActivity("Bulk apply unavailable", "Run Word Review before bulk applying findings.");
+      recordActivity("Review action unavailable", "Run Word Review before applying a finding.");
       return;
     }
+    const previousSession = cloneJson(session);
+    stageAction({
+      title: reviewActionTitle(action),
+      detail: `Review ${findingId} before updating the saved Word review session.`,
+      run: () => executeReviewAction(findingId, action, previousSession, editedRedline),
+    });
+  };
+
+  const executeBulkApplyReview = async (previousSession: WordReviewSession) => {
     try {
-      const data = await postProductAction("word-review-bulk-apply", {
-        session,
+      const data = (await postProductAction("word-review-bulk-apply", {
+        session: previousSession,
         actor: "Legal Reviewer",
-      });
+      })) as { session: WordReviewSession; summary?: { applied?: number } };
       setResults((current) => ({ ...current, "word-review": { data: data.session } }));
       recordActivity("Bulk apply saved", `${data.summary?.applied ?? 0} findings applied.`);
+      setLastUndo({
+        id: `${Date.now()}-bulk-review-undo`,
+        title: "Undo bulk apply",
+        detail: "Restore the review session to the state before bulk apply.",
+        run: () => restoreWordReviewSession(previousSession, "Undo bulk apply", data.session),
+      });
       await loadSaved("reviews", "word-review-list");
     } catch (error) {
       recordActivity("Bulk apply failed", error instanceof Error ? error.message : String(error));
     }
   };
 
-  const importPrecedent = async () => {
+  const bulkApplyReview = () => {
+    const session = results["word-review"]?.data as WordReviewSession | undefined;
+    if (!session) {
+      recordActivity("Bulk apply unavailable", "Run Word Review before bulk applying findings.");
+      return;
+    }
+    const previousSession = cloneJson(session);
+    stageAction({
+      title: "Bulk-apply high confidence",
+      detail: "Review all high-confidence redlines before updating the saved review session.",
+      run: () => executeBulkApplyReview(previousSession),
+    });
+  };
+
+  const executePrecedentImport = async () => {
     try {
       const data = await postProductAction("precedents-upload", {
         title: precedentTitle,
@@ -851,15 +1086,22 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
     }
   };
 
-  const importPrecedentFile = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
+  const importPrecedent = () => {
+    stageAction({
+      title: "Import precedent to library",
+      detail: `Review "${precedentTitle || "Untitled precedent"}" before saving clauses to the shared library.`,
+      run: executePrecedentImport,
+    });
+  };
+
+  const executePrecedentFileImport = async (file: File, title: string) => {
     if (!file) {
       return;
     }
     try {
       const formData = new FormData();
       formData.append("file", file);
-      formData.append("title", precedentTitle || file.name);
+      formData.append("title", title);
       formData.append("visibility", "team");
       const response = await fetch("/api/product/precedents-upload-file", {
         method: "POST",
@@ -876,9 +1118,21 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
       await loadSaved("precedents", "precedents-list");
     } catch (error) {
       recordActivity("Precedent file failed", error instanceof Error ? error.message : String(error));
-    } finally {
-      event.target.value = "";
     }
+  };
+
+  const importPrecedentFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) {
+      return;
+    }
+    const title = precedentTitle || file.name;
+    stageAction({
+      title: "Upload precedent file",
+      detail: `Review ${file.name} before extracting and saving clauses to the shared library.`,
+      run: () => executePrecedentFileImport(file, title),
+    });
   };
 
   const contextDescription =
@@ -887,8 +1141,9 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
       : activeWorkflowId === "document-chat"
         ? "Ask against selected text, the active document, and playbook guidance."
         : activeWorkflowId === "associate-project"
-          ? "Plan supervised project work across the current document set."
+        ? "Plan supervised project work across the current document set."
             : "Use the active matter text for this workflow.";
+  const workflowGridClassName = activeWorkflow ? "grid gap-4" : "grid gap-4 xl:grid-cols-2";
 
   return (
     <div className="flex h-full flex-col overflow-hidden bg-background">
@@ -1034,7 +1289,7 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
                 {activeWorkflowId === "word-review" ? (
                   <div className="space-y-3 rounded-lg border bg-background p-3">
                     <span className="text-xs font-medium text-muted-foreground">Review mode</span>
-                    <div className="grid gap-2 sm:grid-cols-3">
+                    <div className="grid gap-2">
                       {[
                         ["general", "General Review"],
                         ["negotiation", "Negotiation Review"],
@@ -1092,8 +1347,8 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
               <div className="space-y-2 border-t pt-4">
                 <span className="text-xs font-medium text-muted-foreground">Recent activity</span>
                 <div className="space-y-2">
-                  {activity.map((item) => (
-                    <div key={item.id} className="rounded-lg border bg-background p-2 text-sm">
+                  {activity.map((item, index) => (
+                    <div key={`${item.id}-${index}`} className="rounded-lg border bg-background p-2 text-sm">
                       <p className="font-medium">{item.label}</p>
                       <p className="text-muted-foreground">{item.detail}</p>
                     </div>
@@ -1105,14 +1360,25 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
         </Panel>
 
         <div className="min-h-0 overflow-auto">
-          <div className="grid gap-4 xl:grid-cols-2">
+          {pendingAction || lastUndo ? (
+            <div className="mb-4">
+              <ActionGate
+                pendingAction={pendingAction}
+                lastUndo={lastUndo}
+                onConfirm={confirmPendingAction}
+                onCancel={cancelPendingAction}
+                onUndo={undoLastAction}
+              />
+            </div>
+          ) : null}
+          <div className={workflowGridClassName}>
             {visibleWorkflows.map((workflow) => {
               const result = results[workflow.id];
 
               return (
                 <Card key={workflow.id} className="border-border/80 bg-card shadow-none">
                   <CardHeader className="border-b">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                       <div className="flex min-w-0 items-start gap-3">
                         <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-livebook">
                           <i className={workflow.iconClass} />
@@ -1126,7 +1392,7 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
                         type="button"
                         onClick={() => runWorkflow(workflow)}
                         disabled={result?.loading}
-                        className="shrink-0"
+                        className="w-full shrink-0 sm:w-auto"
                       >
                         <i className="ri-play-line" data-icon="inline-start" />
                         {result?.loading ? "Working" : workflow.actionLabel}
@@ -1137,7 +1403,7 @@ export default function ProductSuite({ activeWorkflowId }: { activeWorkflowId?: 
                     <WorkflowResult
                       workflowId={workflow.id}
                       state={result}
-                      onAction={recordActivity}
+                      onAction={stageActivityAction}
                       onReviewAction={applyReviewAction}
                       onBulkApply={bulkApplyReview}
                     />

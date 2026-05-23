@@ -11,10 +11,10 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   webServer: {
-    command: "npm run dev",
+    command: "node ../../scripts/e2e-dev.mjs",
     url: "http://localhost:3002",
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
+    reuseExistingServer: false,
+    timeout: 150_000,
   },
   projects: [
     {
