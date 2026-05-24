@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/livebook-mark.svg" alt="Livebook logo" width="96" height="96">
+</p>
+
 # Livebook
 
 Livebook is an AI-assisted legal workspace for managing contract playbooks,

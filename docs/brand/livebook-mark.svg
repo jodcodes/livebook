@@ -1,0 +1,14 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Livebook mark</title>
+  <desc id="desc">A geometric open book and review check mark for the Livebook repository.</desc>
+  <rect width="512" height="512" rx="112" fill="#101820"/>
+  <path d="M142 148C142 130.327 156.327 116 174 116H242C264.091 116 282 133.909 282 156V374C282 357.431 268.569 344 252 344H174C156.327 344 142 329.673 142 312V148Z" fill="#F5F1E8"/>
+  <path d="M370 148C370 130.327 355.673 116 338 116H270C247.909 116 230 133.909 230 156V374C230 357.431 243.431 344 260 344H338C355.673 344 370 329.673 370 312V148Z" fill="#F5F1E8"/>
+  <path d="M256 154V372" stroke="#101820" stroke-width="18" stroke-linecap="round"/>
+  <path d="M174 172H224" stroke="#1F6F68" stroke-width="18" stroke-linecap="round"/>
+  <path d="M174 218H222" stroke="#1F6F68" stroke-width="18" stroke-linecap="round"/>
+  <path d="M292 172H338" stroke="#1F6F68" stroke-width="18" stroke-linecap="round"/>
+  <path d="M292 218H338" stroke="#1F6F68" stroke-width="18" stroke-linecap="round"/>
+  <circle cx="334" cy="328" r="72" fill="#D7A441"/>
+  <path d="M299 327L324 352L371 300" stroke="#101820" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
