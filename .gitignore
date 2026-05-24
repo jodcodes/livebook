@@ -30,6 +30,7 @@ yarn-error.log*
 **/.idea/
 .playwright-mcp/
 **/.playwright-mcp/
+.superpowers/
 AGENTS.md
 CLAUDE.md
 
