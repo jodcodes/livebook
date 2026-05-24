@@ -11,6 +11,16 @@ team.
 It combines a Rust backend, a Next.js web app, and a Microsoft Word add-in so
 legal and business users can work from the same source of truth.
 
+## Demo
+
+<p align="center">
+  <a href="docs/demo/livebook-demo.mp4">
+    <img src="docs/demo/livebook-demo.gif" alt="Livebook product demo showing workspace sign-in, playbook rules, contract review, and version history" width="960">
+  </a>
+</p>
+
+Click the demo for the MP4 version.
+
 ## Screenshots
 
 ![Livebook sign-in](docs/screenshots/sign-in.png)
